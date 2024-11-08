@@ -1,0 +1,53 @@
+{
+  "app": {
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "/Users/db/.ohos/config/default_utilities_n8pGtPZxXdfPZS6Qnwb6Zkfiy2hoNnUZRF-3Be5GYvE=.cer",
+          "storePassword": "0000001B48EAC4D73D1415B360877DBC2C16B42E24F3C217797AD7AFC28C77FA2ABA9F5A0F2E848F2A134D",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001BF3EDDA841E5FF2A112BA358737E67B229F1333E07B818BAD13DC0F8C6A9905C5A4609B86B6D029",
+          "profile": "/Users/db/.ohos/config/default_utilities_n8pGtPZxXdfPZS6Qnwb6Zkfiy2hoNnUZRF-3Be5GYvE=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "/Users/db/.ohos/config/default_utilities_n8pGtPZxXdfPZS6Qnwb6Zkfiy2hoNnUZRF-3Be5GYvE=.p12"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "compatibleSdkVersion": "5.0.0(12)",
+        "runtimeOS": "HarmonyOS",
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug",
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ffmpeg",
+      "srcPath": "./ffmpeg",
+    }
+  ]
+}

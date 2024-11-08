@@ -1,0 +1,16 @@
+{
+  "name": "@csj/ffmpeg",
+  "version": "1.0.0",
+  "description": "FFmpeg for HarmonyOS.",
+  "main": "Index.ets",
+  "author": "csj",
+  "license": "LGPL v2.1 or later",
+  "dependencies": {
+    "libffmpeg.so": "file:./src/main/cpp/types/libffmpeg"
+  },
+  "repository": "https://gitee.com/changsanjiang/ffmpeg_harmony_os.git",
+  "homepage": "https://gitee.com/changsanjiang/ffmpeg_harmony_os",
+  "keywords": [
+    "ffmpeg"
+  ]
+}
