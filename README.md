@@ -1,6 +1,17 @@
-# FFmpeg for HarmonyOS 
+# FFmpeg for HarmonyOS
 
 目前移植了 fftools/ffmpeg, 可以在App中执行 ffmpeg 相关的脚本命令;
+
+#### 安装
+
+在需要依赖的模块找到 oh-package.json5 文件, 新增如下依赖, 执行同步后等待安装完成;
+```json
+{
+  "dependencies": {
+    "@sj/ffmpeg": "^1.0.1"
+  }
+}
+```
 
 #### 使用示例:
 
@@ -17,9 +28,10 @@
       console.error(`FFmpeg execution failed with error: ${error.message}`);
     });
     ```
-- 取消操作: 
+- 取消操作:
     ```ts
     import { FFAbortController, FFmpeg } from '@sj/ffmpeg';
+  
     let abortController = new FFAbortController(); // 创建 abortController, 在需要时终止脚本执行; 
     setTimeout(() => abortController.abort(), 4000); // 模拟取消; 这里模拟取消, 延迟4s后取消操作; 
     
@@ -31,8 +43,3 @@
       console.error(`FFmpeg execution failed with error: ${error.message}`);
     });
     ```
-
-#### 安装
-```shell
-ohpm  install @sj/ffmpeg 
-```
