@@ -4150,7 +4150,7 @@ static int64_t getmaxrss(void)
 
 static pthread_once_t ffmpeg_init_once = PTHREAD_ONCE_INIT;
 void ffmpeg_init(void) {
-    init_dynload();
+//     init_dynload();
 
     register_exit(ffmpeg_cleanup);
     set_log_callback();
