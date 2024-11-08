@@ -18,6 +18,6 @@
 # -keep-global-name: specifies names that you want to keep in the global scope
 
 -enable-property-obfuscation
--enable-toplevel-obfuscation
+#-enable-toplevel-obfuscation
 -enable-filename-obfuscation
--enable-export-obfuscation
+#-enable-export-obfuscation
