@@ -1,6 +1,4 @@
-import { FFAbortController, FFmpeg } from '@app/ffmpeg';
-import { taskpool } from '@kit.ArkTS';
-import emitter from '@ohos.events.emitter';
+import { FFAbortController, FFmpeg } from '@sj/ffmpeg';
 
 @Entry
 @Component
@@ -28,7 +26,7 @@ struct Index {
 
             let cacheDir = getContext(this).cacheDir;
             let outputPath = cacheDir + `/output_${index}.mp4`;
-            let commands = ["ffmpeg", "-i", "http://video.cdn.lanwuzhe.com/video/173019838469310.29%E8%83%A1%E7%8E%A5.mp4?videoSize=720*1280", outputPath, "-y", "-v", "debug"];
+            let commands = ["ffmpeg", "-i", "https://xy2.v.netease.com/2020/dhp/kijqolmhew14.mp4", outputPath, "-y", "-v", "debug"];
 
             let abortController = new FFAbortController();
             setTimeout(() => abortController.abort(), 4000);

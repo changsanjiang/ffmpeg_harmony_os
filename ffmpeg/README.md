@@ -31,3 +31,8 @@
       console.error(`FFmpeg execution failed with error: ${error.message}`);
     });
     ```
+
+#### 安装
+```shell
+ohpm  install @sj/ffmpeg 
+```
