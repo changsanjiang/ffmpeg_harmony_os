@@ -6,7 +6,7 @@
   "author": "",
   "license": "",
   "dependencies": {
-    "@app/ffmpeg": "file:../ffmpeg"
+    "@sj/ffmpeg": "file:../ffmpeg"
   }
 }
 

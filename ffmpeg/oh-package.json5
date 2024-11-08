@@ -1,5 +1,5 @@
 {
-  "name": "@csj/ffmpeg",
+  "name": "@sj/ffmpeg",
   "version": "1.0.0",
   "description": "FFmpeg for HarmonyOS.",
   "main": "Index.ets",
