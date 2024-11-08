@@ -6,7 +6,7 @@
 
 - 与在终端使用类似, 通过拼接 ffmpeg 命令执行脚本:
     ```ts
-    import { FFmpeg } from '@app/ffmpeg';
+    import { FFmpeg } from '@sj/ffmpeg';
             
     let commands = ["ffmpeg", "-i", inputPath, outputPath, "-y", "-v", "debug"];            
     FFmpeg.execute(commands, (logLevel: number, logMessage: string) => {
@@ -19,7 +19,7 @@
     ```
 - 取消操作: 
     ```ts
-    import { FFAbortController, FFmpeg } from '@app/ffmpeg';
+    import { FFAbortController, FFmpeg } from '@sj/ffmpeg';
     let abortController = new FFAbortController(); // 创建 abortController, 在需要时终止脚本执行; 
     setTimeout(() => abortController.abort(), 4000); // 模拟取消; 这里模拟取消, 延迟4s后取消操作; 
     
