@@ -4,6 +4,12 @@ import { FFAbortSignal } from './FFAbortController';
 import BuildProfile from '../../../../BuildProfile';
 
 namespace FFmpeg {
+  interface Options {
+    logCallback?: (level: number, msg: string) => void
+    progressCallback?: (msg: string) => void
+    signal?: FFAbortSignal
+  }
+
   /**
    * 执行脚本命令;
    *
@@ -34,15 +40,26 @@ namespace FFmpeg {
    *  });
    * \endcode
    * */
-  export async function execute(commands: string[], logCallback?: (level: number, msg: string) => void, signal?: FFAbortSignal): Promise<void> {
+  export async function execute(commands: string[], options?: Options): Promise<void> {
     try {
       let executionId = await generateExecutionId();
       ffmpeg.prepare(executionId);
-      signal?.addEventListener('aborted', () => ffmpeg.cancel(executionId));
-      let task = new taskpool.Task(performTask, new ExecutionParams(executionId, commands, BuildProfile.DEBUG));
-      if ( logCallback ) {
-        task.onReceiveData((level: number, msg: string) => {
-          logCallback(level, msg);
+      options?.signal?.addEventListener('aborted', () => ffmpeg.cancel(executionId));
+      let task = new taskpool.Task(performTask, new ExecutionParams(executionId, commands));
+      let logCallback = options?.logCallback;
+      let progressCallback = options?.progressCallback;
+      if ( logCallback || progressCallback ) {
+        task.onReceiveData((type: number, ...args: Object[]) => {
+          switch (type) {
+            case 0: {
+              if ( logCallback ) logCallback(args[0] as number, args[1] as string);
+              break;
+            }
+            case 1: {
+              if ( progressCallback ) progressCallback(args[0] as string);
+              break;
+            }
+          }
         });
       }
       let result = await taskpool.execute(task) as number;
@@ -78,11 +95,9 @@ namespace FFmpeg {
   class ExecutionParams {
     executionId: number;
     commands: string[];
-    debuggable: boolean;
-    constructor(executionId: number, commands: string[], debuggable: boolean) {
+    constructor(executionId: number, commands: string[]) {
       this.executionId = executionId;
       this.commands = commands;
-      this.debuggable = debuggable;
     }
   }
 
@@ -91,11 +106,18 @@ namespace FFmpeg {
     let result = ffmpeg.execute(
       params.executionId,
       params.commands,
-      (level: number, msg: string) => taskpool.Task.sendData(level, msg),
-      params.debuggable ? (msg) => console.log(msg): undefined
+      (level: number, msg: string) => taskpool.Task.sendData(0, level, msg),
+      (msg: string) => taskpool.Task.sendData(1, msg),
     );
     return result;
   }
+
+  class Init {
+    constructor() {
+      ffmpeg.setPrintHandler((msg) => console.log(msg));
+    }
+  }
+  let _libInit = BuildProfile.DEBUG ? new Init() : undefined;
 }
 
 export default FFmpeg;

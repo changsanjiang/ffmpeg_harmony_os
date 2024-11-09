@@ -42,12 +42,12 @@ native_exe_prepare(napi_env env, napi_callback_info info) {
 /// 1.	JavaScript 端：直接创建字符串数组并调用 N-API 函数。
 // 	2.	N-API 端：在接收端中，使用 napi_is_array 检查参数是否为数组，使用 napi_get_array_length 获取长度，接着通过 napi_get_element 逐一访问数组中的元素。
 napi_value
-native_exe_cmds(napi_env env, napi_callback_info info) { // info: (executionId: number, cmds: string[], log_callback: (level, msg) => void, print_handler: (msg) => void)
+native_exe_cmds(napi_env env, napi_callback_info info) {
     size_t argc = 4;
     int execution_id_index = 0;
     int cmds_index = 1;
     int log_callback_index = 2;
-    int print_handler_index = 3;
+    int progress_callback_index = 3;
     
     napi_value args[argc];
 
@@ -98,11 +98,11 @@ native_exe_cmds(napi_env env, napi_callback_info info) { // info: (executionId: 
     napi_create_reference(env, args[log_callback_index], 1, &log_callback_ref);
     
     // 获取打印处理函数
-    napi_ref print_handler_ref;
-    napi_create_reference(env, args[print_handler_index], 1, &print_handler_ref);
+    napi_ref progress_callback_ref;
+    napi_create_reference(env, args[progress_callback_index], 1, &progress_callback_ref);
     
     // 初始化执行上下文
-    native_ctx_init(env, log_callback_ref, print_handler_ref);
+    native_ctx_init(env, log_callback_ref, progress_callback_ref);
 
     // 开始执行命令
     int result = ffmpeg_main(&task->is_running, cmd_count, cmds);

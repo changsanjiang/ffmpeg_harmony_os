@@ -29,10 +29,13 @@ struct Index {
             let commands = ["ffmpeg", "-i", "https://dh2.v.netease.com/2017/cg/fxtpty.mp4", outputPath, "-y", "-v", "info"];
 
             let abortController = new FFAbortController();
-            // setTimeout(() => abortController.abort(), 4000);
-            FFmpeg.execute(commands, (logLevel: number, logMessage: string) => {
-              console.log(`[${logLevel}]${logMessage}`);
-            }, abortController.signal).then(() => {
+            setTimeout(() => abortController.abort(), 4000);
+
+            FFmpeg.execute(commands, {
+              logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
+              progressCallback: (message: string) => console.log(`[progress]${message}`),
+              signal: abortController.signal
+            }).then(() => {
               console.info("FFmpeg execution succeeded.");
             }).catch((error: Error) => {
               console.error(`FFmpeg execution failed with error: ${error.message}`);
