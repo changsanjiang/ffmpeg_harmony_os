@@ -4155,7 +4155,6 @@ void ffmpeg_init(void) {
 
     register_exit(ffmpeg_cleanup);
     set_log_callback();
-    av_log_set_level(AV_LOG_INFO);
 
     setvbuf(stderr,NULL,_IONBF,0); /* win32 runtime needs this */
 

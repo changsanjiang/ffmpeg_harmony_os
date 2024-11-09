@@ -1229,9 +1229,7 @@ int opt_max_alloc(void *optctx, const char *opt, const char *arg)
     return 0;
 }
 
-int opt_loglevel(void *optctx, const char *opt, const char *arg)
-{
-    const struct { const char *name; int level; } log_levels[] = {
+const struct { const char *name; int level; } log_levels[] = {
         { "quiet"  , AV_LOG_QUIET   },
         { "panic"  , AV_LOG_PANIC   },
         { "fatal"  , AV_LOG_FATAL   },
@@ -1242,6 +1240,9 @@ int opt_loglevel(void *optctx, const char *opt, const char *arg)
         { "debug"  , AV_LOG_DEBUG   },
         { "trace"  , AV_LOG_TRACE   },
     };
+
+int opt_loglevel(void *optctx, const char *opt, const char *arg)
+{
     const char *token;
     char *tail;
     int flags = av_log_get_flags();
@@ -1468,5 +1469,27 @@ int show_sinks(void *optctx, const char *opt, const char *arg)
 
 void set_log_callback(void) {
     av_log_set_callback(log_callback_help);
+}
+
+int native_log_get_level_by_name(const char *name) {
+    for (int i = 0; i < FF_ARRAY_ELEMS(log_levels); i++) {
+        if (!strcmp(log_levels[i].name, name)) {
+            return log_levels[i].level;
+        }
+    }
+    return 0;
+}
+
+const char *native_log_get_level_name(int level) {
+    for (int i = 0; i < FF_ARRAY_ELEMS(log_levels); i++) {
+        if ( level == log_levels[i].level ) {
+            return log_levels[i].name;
+        }
+    }
+    return NULL;
+}
+
+int native_log_get_level(void) {
+    return av_log_get_level();
 }
 #endif /* CONFIG_AVDEVICE */

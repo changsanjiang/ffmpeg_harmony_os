@@ -6,7 +6,6 @@
 
 #include "progress_callback.h"
 #include "native_ctx.h"
-#include <cstring>
 
 EXTERN_C_START
 void 

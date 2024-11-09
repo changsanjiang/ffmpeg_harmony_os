@@ -1,4 +1,7 @@
 export const setPrintHandler: (printHandler?: (msg: string) => void) => void;
+export const setLogLevel: (name: string) => void;
+export const getLogLevel: () => string;
+
 export const prepare: (executionId: number) => void;
 export const execute: (
   executionId: number,
