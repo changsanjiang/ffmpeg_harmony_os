@@ -1,4 +1,4 @@
-import { FFAbortController, FFmpeg } from '@sj/ffmpeg';
+import { FFAbortController, FFmpeg, FFProgressMessageParser } from '@sj/ffmpeg';
 
 @Entry
 @Component
@@ -33,7 +33,7 @@ struct Index {
 
             FFmpeg.execute(commands, {
               logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
-              progressCallback: (message: string) => console.log(`[progress]${message}`),
+              progressCallback: (message: string) => console.log(`[progress]${message}, json=${JSON.stringify(FFProgressMessageParser.parse(message))}`),
               signal: abortController.signal
             }).then(() => {
               console.info("FFmpeg execution succeeded.");

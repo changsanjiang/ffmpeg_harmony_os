@@ -33,12 +33,12 @@ namespace FFmpeg {
   export async function execute(commands: string[], options?: Options): Promise<void> {
     FFCommandInspector.inspect(commands);
     try {
-      let executionId = await generateExecutionId();
+      const executionId = await generateExecutionId();
       ffmpeg.prepare(executionId);
       options?.signal?.addEventListener('aborted', () => ffmpeg.cancel(executionId));
-      let task = new taskpool.Task(performTask, new ExecutionParams(executionId, commands));
-      let logCallback = options?.logCallback;
-      let progressCallback = options?.progressCallback;
+      const task = new taskpool.Task(performTask, new ExecutionParams(executionId, commands));
+      const logCallback = options?.logCallback;
+      const progressCallback = options?.progressCallback;
       if ( logCallback || progressCallback ) {
         task.onReceiveData((type: number, ...args: Object[]) => {
           switch (type) {
@@ -86,12 +86,12 @@ namespace FFmpeg {
   function createError(code: number): Error {
     switch (code) {
       case 255: {
-        let err = new Error('Operation cancelled by user.');
+        const err = new Error('Operation cancelled by user.');
         err.name = 'FF_CANCELLED_ERR';
         return err;
       }
       default: {
-        let err = new Error(`Operation failed with code ${code}. Please check logs for potential issues and troubleshooting details.`);
+        const err = new Error(`Operation failed with code ${code}. Please check logs for potential issues and troubleshooting details.`);
         err.name = 'FF_GENERIC_ERR';
         return err;
       }
@@ -99,7 +99,7 @@ namespace FFmpeg {
   }
 
   let nextExecutionId = 0;
-  let lock: ArkTSUtils.locks.AsyncLock = new ArkTSUtils.locks.AsyncLock();
+  const lock: ArkTSUtils.locks.AsyncLock = new ArkTSUtils.locks.AsyncLock();
 
   async function generateExecutionId(): Promise<number> {
     return lock.lockAsync(() => ++nextExecutionId);
@@ -116,7 +116,7 @@ namespace FFmpeg {
 
   @Concurrent
   function performTask(params: ExecutionParams): number {
-    let result = ffmpeg.execute(
+    const result = ffmpeg.execute(
       params.executionId,
       params.commands,
       (level: number, msg: string) => taskpool.Task.sendData(0, level, msg),
@@ -130,7 +130,7 @@ namespace FFmpeg {
       ffmpeg.setPrintHandler((msg) => console.log(msg));
     }
   }
-  let _libInit = BuildProfile.DEBUG ? new Init() : undefined;
+  const _libInit = BuildProfile.DEBUG ? new Init() : undefined;
 }
 
 export default FFmpeg;
