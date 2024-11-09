@@ -25,6 +25,7 @@
 
 #include "config.h"
 #include "extension/client_print.h"
+#include "extension/progress_callback.h"
 #include "extension/task.h"
 #include "fftools/opt_common.h"
 #include "fftools/thread_variables.h"
@@ -1586,9 +1587,9 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
     double bitrate;
     double speed;
     int64_t pts = INT64_MIN + 1;
-    static int64_t last_time = -1;
-    static int first_report = 1;
-    static int qp_histogram[52];
+    _Thread_local static int64_t last_time = -1;
+    _Thread_local static int first_report = 1;
+    _Thread_local static int qp_histogram[52];
     int hours, mins, secs, us;
     const char *hours_sign;
     int ret;
@@ -1756,19 +1757,19 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
     av_log(NULL, AV_LOG_INFO, "%s\n", buf.str); // 移除stats及标准输出处理;
     av_bprint_finalize(&buf, NULL);
 
+    av_bprintf(&buf_script, "progress=%s\n", is_last_report ? "end" : "continue");
+    native_report_progress(buf_script.str);
+
     if (progress_avio) {
-        av_bprintf(&buf_script, "progress=%s\n",
-                   is_last_report ? "end" : "continue");
-        avio_write(progress_avio, buf_script.str,
-                   FFMIN(buf_script.len, buf_script.size - 1));
+        avio_write(progress_avio, (const unsigned char *)buf_script.str, FFMIN(buf_script.len, buf_script.size - 1));
         avio_flush(progress_avio);
-        av_bprint_finalize(&buf_script, NULL);
         if (is_last_report) {
             if ((ret = avio_closep(&progress_avio)) < 0)
                 av_log(NULL, AV_LOG_ERROR,
                        "Error closing progress log, loss of information possible: %s\n", av_err2str(ret));
         }
     }
+    av_bprint_finalize(&buf_script, NULL);
 
     first_report = 0;
 

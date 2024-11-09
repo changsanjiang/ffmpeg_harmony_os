@@ -7,6 +7,10 @@
 // 调用接口 https://gitee.com/openharmony-sig/knowledge_demo_temp/blob/master/docs/napi_study/docs/hello_napi.md#%E8%B0%83%E7%94%A8%E6%8E%A5%E5%8F%A3
 
 EXTERN_C_START
+
+extern napi_value 
+native_set_client_print_handler(napi_env env, napi_callback_info info);
+
 static napi_value Init(napi_env env, napi_value exports)
 {
 //     typedef struct {
@@ -26,6 +30,7 @@ static napi_value Init(napi_env env, napi_value exports)
 //         •	napi_writable: 表示属性的值是可修改的（对于常量值，可能不设置此选项）。
 //         •	data: 大多数场景中可以为空，仅在回调函数中需要特定数据传递时使用。
     napi_property_descriptor desc[] = {
+        { "setPrintHandler", nullptr, native_set_client_print_handler, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "prepare", nullptr, native_exe_prepare, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "execute", nullptr, native_exe_cmds, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "cancel", nullptr, native_exe_cancel, nullptr, nullptr, nullptr, napi_default, nullptr },

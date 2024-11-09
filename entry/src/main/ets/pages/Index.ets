@@ -26,12 +26,12 @@ struct Index {
 
             let cacheDir = getContext(this).cacheDir;
             let outputPath = cacheDir + `/output_${index}.mp4`;
-            let commands = ["ffmpeg", "-i", "https://xy2.v.netease.com/2020/dhp/kijqolmhew14.mp4", outputPath, "-y", "-v", "debug"];
+            let commands = ["ffmpeg", "-i", "https://dh2.v.netease.com/2017/cg/fxtpty.mp4", outputPath, "-y", "-v", "info"];
 
             let abortController = new FFAbortController();
-            setTimeout(() => abortController.abort(), 4000);
+            // setTimeout(() => abortController.abort(), 4000);
             FFmpeg.execute(commands, (logLevel: number, logMessage: string) => {
-              console.log(`${logMessage}`);
+              console.log(`[${logLevel}]${logMessage}`);
             }, abortController.signal).then(() => {
               console.info("FFmpeg execution succeeded.");
             }).catch((error: Error) => {
