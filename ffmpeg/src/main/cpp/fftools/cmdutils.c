@@ -90,9 +90,8 @@ static void log_sanitize(uint8_t *line){
 // }
 // void av_log_set_callback(void (*callback)(void*, int, const char*, va_list));
 void log_callback_help(void *ptr, int level, const char *fmt, va_list vl) {
-#define LINE_SZ 1024
     int print_prefix = 0;
-    char line[LINE_SZ];
+    char line[1024];
 
     if (level >= 0) {
         level &= 0xff;
@@ -100,7 +99,7 @@ void log_callback_help(void *ptr, int level, const char *fmt, va_list vl) {
 
     if (level > av_log_get_level())
         return;
-    int ret = av_log_format_line2(ptr, level, fmt, vl, line, LINE_SZ, &print_prefix);
+    int ret = av_log_format_line2(ptr, level, fmt, vl, line, sizeof(line), &print_prefix);
 
     if ( ret > 0 ) {
         log_sanitize((uint8_t *)line);

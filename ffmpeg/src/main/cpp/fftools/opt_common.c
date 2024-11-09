@@ -70,8 +70,8 @@ enum show_muxdemuxers {
     SHOW_MUXERS,
 };
 
-static FILE *report_file;
-static int report_file_level = AV_LOG_DEBUG;
+_Thread_local static FILE *report_file;
+_Thread_local static int report_file_level = AV_LOG_DEBUG;
 
 int show_license(void *optctx, const char *opt, const char *arg)
 {
@@ -1117,7 +1117,7 @@ static void log_callback_report(void *ptr, int level, const char *fmt, va_list v
     static int print_prefix = 1;
 
     va_copy(vl2, vl);
-    av_log_default_callback(ptr, level, fmt, vl);
+    log_callback_help(ptr, level, fmt, vl);
     av_log_format_line(ptr, level, fmt, vl2, line, sizeof(line), &print_prefix);
     va_end(vl2);
     if (report_file_level >= level) {
@@ -1141,35 +1141,36 @@ int init_report(const char *env, FILE **file)
     time(&now);
     tm = localtime(&now);
 
-    while (env && *env) {
-        if ((ret = av_opt_get_key_value(&env, "=", ":", 0, &key, &val)) < 0) {
-            if (count)
-                av_log(NULL, AV_LOG_ERROR,
-                       "Failed to parse FFREPORT environment variable: %s\n",
-                       av_err2str(ret));
-            break;
-        }
-        if (*env)
-            env++;
-        count++;
-        if (!strcmp(key, "file")) {
-            av_free(filename_template);
-            filename_template = val;
-            val = NULL;
-        } else if (!strcmp(key, "level")) {
-            char *tail;
-            report_file_level = strtol(val, &tail, 10);
-            if (*tail) {
-                av_log(NULL, AV_LOG_FATAL, "Invalid report file level\n");
-                exit_program(1);
-            }
-            envlevel = 1;
-        } else {
-            av_log(NULL, AV_LOG_ERROR, "Unknown key '%s' in FFREPORT\n", key);
-        }
-        av_free(val);
-        av_free(key);
-    }
+    // env 脚步环境变量 在这里是没用的, 不可能被设置, 这段注释了;
+//     while (env && *env) {
+//         if ((ret = av_opt_get_key_value(&env, "=", ":", 0, &key, &val)) < 0) {
+//             if (count)
+//                 av_log(NULL, AV_LOG_ERROR,
+//                        "Failed to parse FFREPORT environment variable: %s\n",
+//                        av_err2str(ret));
+//             break;
+//         }
+//         if (*env)
+//             env++;
+//         count++;
+//         if (!strcmp(key, "file")) {
+//             av_free(filename_template);
+//             filename_template = val;
+//             val = NULL;
+//         } else if (!strcmp(key, "level")) {
+//             char *tail;
+//             report_file_level = strtol(val, &tail, 10);
+//             if (*tail) {
+//                 av_log(NULL, AV_LOG_FATAL, "Invalid report file level\n");
+//                 exit_program(1);
+//             }
+//             envlevel = 1;
+//         } else {
+//             av_log(NULL, AV_LOG_ERROR, "Unknown key '%s' in FFREPORT\n", key);
+//         }
+//         av_free(val);
+//         av_free(key);
+//     }
 
     av_bprint_init(&filename, 0, AV_BPRINT_SIZE_AUTOMATIC);
     expand_filename_template(&filename,
@@ -1181,8 +1182,9 @@ int init_report(const char *env, FILE **file)
     }
 
     prog_loglevel = av_log_get_level();
-    if (!envlevel)
-        report_file_level = FFMAX(report_file_level, prog_loglevel);
+//     if (!envlevel)
+//         report_file_level = FFMAX(report_file_level, prog_loglevel);
+    report_file_level = prog_loglevel; // 日志等级采用全局配置的等级;
 
     report_file = fopen(filename.str, "w");
     if (!report_file) {

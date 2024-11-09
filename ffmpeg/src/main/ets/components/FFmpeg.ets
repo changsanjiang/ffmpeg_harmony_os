@@ -2,6 +2,7 @@ import ffmpeg from 'libffmpeg.so';
 import { ArkTSUtils, taskpool } from '@kit.ArkTS';
 import { FFAbortSignal } from './FFAbortController';
 import BuildProfile from '../../../../BuildProfile';
+import { FFCommandInspector } from './FFCommandInspector';
 
 namespace FFmpeg {
   interface Options {
@@ -41,6 +42,7 @@ namespace FFmpeg {
    * \endcode
    * */
   export async function execute(commands: string[], options?: Options): Promise<void> {
+    FFCommandInspector.inspect(commands);
     try {
       let executionId = await generateExecutionId();
       ffmpeg.prepare(executionId);

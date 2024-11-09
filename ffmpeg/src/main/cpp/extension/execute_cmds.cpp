@@ -97,7 +97,7 @@ native_exe_cmds(napi_env env, napi_callback_info info) {
     napi_ref log_callback_ref;
     napi_create_reference(env, args[log_callback_index], 1, &log_callback_ref);
     
-    // 获取打印处理函数
+    // 获取进度回调函数
     napi_ref progress_callback_ref;
     napi_create_reference(env, args[progress_callback_index], 1, &progress_callback_ref);
     

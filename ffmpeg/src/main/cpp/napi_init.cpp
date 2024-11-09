@@ -36,9 +36,6 @@ static napi_value Init(napi_env env, napi_value exports)
         { "cancel", nullptr, native_exe_cancel, nullptr, nullptr, nullptr, napi_default, nullptr },
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
-//     napi_value set_log_callback_func;
-//     napi_create_function(env, nullptr, 0, native_exe_cmds, nullptr, &set_log_callback_func);
-//     napi_set_named_property(env, exports, "execute", set_log_callback_func);
     return exports;
 }
 EXTERN_C_END

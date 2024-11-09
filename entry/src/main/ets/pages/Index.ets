@@ -26,7 +26,7 @@ struct Index {
 
             let cacheDir = getContext(this).cacheDir;
             let outputPath = cacheDir + `/output_${index}.mp4`;
-            let commands = ["ffmpeg", "-i", "https://dh2.v.netease.com/2017/cg/fxtpty.mp4", outputPath, "-y", "-v", "info"];
+            let commands = ["ffmpeg", "-i", "https://dh2.v.netease.com/2017/cg/fxtpty.mp4", outputPath, "-y"];
 
             let abortController = new FFAbortController();
             setTimeout(() => abortController.abort(), 4000);
