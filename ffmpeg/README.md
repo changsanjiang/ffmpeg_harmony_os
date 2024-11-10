@@ -19,7 +19,7 @@
     ```ts
     import { FFProgressMessageParser, FFmpeg } from '@sj/ffmpeg';
             
-    let commands = ["ffmpeg", "-i", inputPath, outputPath, "-y", "-v", "debug"];            
+    let commands = ["ffmpeg", "-i", inputPath, outputPath, "-y"];            
     FFmpeg.execute(commands, {
       logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
       progressCallback: (message: string) => console.log(`[progress]${JSON.stringify(FFProgressMessageParser.parse(message))}`),
@@ -36,7 +36,7 @@
     let abortController = new FFAbortController(); // 创建 abortController, 在需要时终止脚本执行; 
     setTimeout(() => abortController.abort(), 4000); // 模拟取消; 这里模拟取消, 延迟4s后取消操作; 
     
-    let commands = ["ffmpeg", "-i", inputPath, outputPath, "-y", "-v", "debug"];
+    let commands = ["ffmpeg", "-i", inputPath, outputPath, "-y"];
     FFmpeg.execute(commands, {
       logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
       progressCallback: (message: string) => console.log(`[progress]${JSON.stringify(FFProgressMessageParser.parse(message))}`),
