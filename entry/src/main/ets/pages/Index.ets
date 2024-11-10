@@ -22,7 +22,7 @@ struct Index {
             // let cacheDir = getContext(this).cacheDir;
             // let inputPath = cacheDir + "/output.mp3";
             // let outputPath = cacheDir + `/output_${index}.aac`;
-            // let commands = ["ffmpeg", "-i", inputPath, outputPath, "-y", "-v", "debug"];
+            // let commands = ["ffmpeg", "-i", inputPath, outputPath, "-y"];
 
             let cacheDir = getContext(this).cacheDir;
             let outputPath = cacheDir + `/output_${index}.mp4`;
