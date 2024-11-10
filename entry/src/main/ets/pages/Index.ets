@@ -33,7 +33,7 @@ struct Index {
 
             FFmpeg.execute(commands, {
               logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
-              progressCallback: (message: string) => console.log(`[progress]${message}, json=${JSON.stringify(FFProgressMessageParser.parse(message))}`),
+              progressCallback: (message: string) => console.log(`[progress]${JSON.stringify(FFProgressMessageParser.parse(message))}`),
               signal: abortController.signal
             }).then(() => {
               console.info("FFmpeg execution succeeded.");
