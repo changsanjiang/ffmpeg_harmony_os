@@ -8,7 +8,7 @@
 ```json
 {
   "dependencies": {
-    "@sj/ffmpeg": "^1.0.1"
+    "@sj/ffmpeg": "^1.0.2"
   }
 }
 ```
