@@ -14,7 +14,8 @@ EXTERN_C_START
 static napi_threadsafe_function print_handler_fn = nullptr; // 打印回调函数: (msg) => void
 
 // 主线程的回调函数
-void CompleteTask(napi_env env, napi_value js_cb, void* context, void* data) {
+static void
+InvokeJavaScriptCallback(napi_env env, napi_value js_cb, void* context, void* data) {
     char* message = (char*)data;
 
     // 调用 JavaScript 回调
@@ -50,7 +51,7 @@ native_set_client_print_handler(napi_env env, napi_callback_info info) {
     napi_create_string_utf8(env, "print_handler", NAPI_AUTO_LENGTH, &async_resource_name);
 
     // 创建线程安全函数
-    napi_status status = napi_create_threadsafe_function(env, args[print_handler_index], nullptr, async_resource_name, 0, 1, nullptr, nullptr, nullptr, CompleteTask, &print_handler_fn);
+    napi_status status = napi_create_threadsafe_function(env, args[print_handler_index], nullptr, async_resource_name, 0, 1, nullptr, nullptr, nullptr, InvokeJavaScriptCallback, &print_handler_fn);
 
     if (status != napi_ok) {
         char msg[128];
