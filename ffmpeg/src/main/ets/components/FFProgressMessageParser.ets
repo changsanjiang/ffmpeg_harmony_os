@@ -26,7 +26,7 @@ namespace FFProgressMessageParser {
     progress: string;
   }
 
-  export function parse(progressMessage: string): Data | undefined {
+  export function parse(progressMessage: string): Data {
     const lines = progressMessage.split('\n');
     const data: Data = {
       frame: 0,
@@ -88,7 +88,7 @@ namespace FFProgressMessageParser {
         }
       }
     }
-    return data.frame ? data : undefined;
+    return data;
   }
 
   function parseLine(line: string): [string, string] | undefined {
