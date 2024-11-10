@@ -17,17 +17,18 @@ namespace FFmpeg {
    * 例如: FFmpeg.execute(["ffmpeg", "-i", inputPath, outputPath, "-y"]);
    *
    * \code
-   * // 可通过 abortController 来取消操作;
-   * let abortController = new FFAbortController();
-   * let abortSignal = abortController.signal;
-   * // 模拟取消操作;
-   * setTimeout(() => abortController.abort(), 4000); // 4秒后取消操作;
+   * let abortController = new FFAbortController(); // 如执行过程中需要取消, 可创建 abortController 来控制取消操作;
+   * setTimeout(() => abortController.abort(), 4000); // 模拟取消; 这里模拟取消, 延迟4s后取消操作;
    * // 开始执行命令;
-   * FFmpeg.execute(commands, (logLevel: number, logMessage: string) => console.log(`${logMessage}`), abortSignal).then(() => {
+   * FFmpeg.execute(commands, {
+   *  logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
+   *  progressCallback: (message: string) => console.log(`[progress]${JSON.stringify(FFProgressMessageParser.parse(message))}`),
+   *  signal: abortController.signal //  传入 abortController.signal, 内部会监听取消信号;
+   * }).then(() => {
    *  console.info("FFmpeg execution succeeded.");
    * }).catch((error: Error) => {
    *  console.error(`FFmpeg execution failed with error: ${error.message}`);
-   *  });
+   * });
    * \endcode
    * */
   export async function execute(commands: string[], options?: Options): Promise<void> {
