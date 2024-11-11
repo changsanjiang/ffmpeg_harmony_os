@@ -27,7 +27,7 @@ InvokeJavaScriptCallback(napi_env env, napi_value js_cb, void* context, void* da
 }
 
 napi_value 
-native_set_client_print_handler(napi_env env, napi_callback_info info) {
+NAPI_SetClientPrintHandler(napi_env env, napi_callback_info info) {
     if (print_handler_fn) {
         napi_release_threadsafe_function(print_handler_fn, napi_tsfn_release);
         print_handler_fn = nullptr;

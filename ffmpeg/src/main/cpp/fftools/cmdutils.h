@@ -50,6 +50,8 @@ extern _Thread_local AVDictionary *format_opts, *codec_opts;
 
 extern _Thread_local int hide_banner;
 
+extern _Thread_local int print_prefix;
+
 /**
  * Register a program-specific cleanup routine.
  */

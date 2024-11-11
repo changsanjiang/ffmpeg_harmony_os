@@ -17,4 +17,6 @@ extern _Thread_local int exit_value;
 
 extern _Thread_local OptionDef *options;
 
+extern _Thread_local int program_log_level;
+extern _Thread_local int program_log_flags;
 #endif //UTILITIES_THREAD_VARIABLES_H

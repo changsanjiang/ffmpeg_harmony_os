@@ -2,7 +2,6 @@ import ffmpeg from 'libffmpeg.so';
 import { ArkTSUtils, taskpool } from '@kit.ArkTS';
 import { FFAbortSignal } from './FFAbortController';
 import BuildProfile from '../../../../BuildProfile';
-import { FFCommandInspector } from './FFCommandInspector';
 
 namespace FFmpeg {
   interface Options {
@@ -32,12 +31,11 @@ namespace FFmpeg {
    * \endcode
    * */
   export async function execute(commands: string[], options?: Options): Promise<void> {
-    FFCommandInspector.inspect(commands);
     try {
       const executionId = await generateExecutionId();
       ffmpeg.prepare(executionId);
       options?.signal?.addEventListener('aborted', () => ffmpeg.cancel(executionId));
-      const task = new taskpool.Task(performTask, new ExecutionParams(executionId, commands));
+      const task = new taskpool.Task(performTask, new ExecutionParams(executionId, commands, options?.logCallback != undefined, options?.progressCallback != undefined));
       const logCallback = options?.logCallback;
       const progressCallback = options?.progressCallback;
       if ( logCallback || progressCallback ) {
@@ -60,28 +58,6 @@ namespace FFmpeg {
     catch (e) {
       return Promise.reject(e);
     }
-  }
-
-  /** 日志等级;
-   *
-   * - quiet：禁用所有日志输出，不显示任何信息。
-   * - panic：仅显示 panic 级别的错误，通常是严重的内部错误，导致程序无法继续执行。
-   * - fatal：显示 fatal 错误，表示严重错误，导致程序退出。
-   * - error：显示错误信息，程序可能会继续执行，但需要处理错误。
-   * - warning：显示警告信息，表示潜在问题，但不会影响程序继续执行。
-   * - info：显示一般信息，包含较为简洁的程序输出。
-   * - verbose：显示详细信息，通常包含更多的调试信息。
-   * - debug：显示最详细的调试信息，用于开发和调试过程。
-   * - trace：显示最详细的跟踪信息，记录每个细节和操作，通常用于极其详细的调试和分析。
-   * */
-  export type LogLevel = 'quiet' | 'panic' | 'fatal' | 'error' | 'warning' | 'info' | 'verbose' | 'debug' | 'trace';
-  /** 设置日志等级; */
-  export function setLogLevel(name: LogLevel) {
-    ffmpeg.setLogLevel(name);
-  }
-  /** 默认为 'info'; */
-  export function getLogLevel(): LogLevel {
-    return ffmpeg.getLogLevel() as LogLevel;
   }
 
   function createError(code: number): Error {
@@ -109,9 +85,13 @@ namespace FFmpeg {
   class ExecutionParams {
     executionId: number;
     commands: string[];
-    constructor(executionId: number, commands: string[]) {
+    enabledLogReception: boolean;
+    enabledProgressReception: boolean;
+    constructor(executionId: number, commands: string[], enabledLogReception: boolean, enabledProgressReception: boolean) {
       this.executionId = executionId;
       this.commands = commands;
+      this.enabledLogReception = enabledLogReception;
+      this.enabledProgressReception = enabledProgressReception;
     }
   }
 
@@ -120,8 +100,8 @@ namespace FFmpeg {
     const result = ffmpeg.execute(
       params.executionId,
       params.commands,
-      (level: number, msg: string) => taskpool.Task.sendData(0, level, msg),
-      (msg: string) => taskpool.Task.sendData(1, msg),
+      params.enabledLogReception ? (level: number, msg: string) => taskpool.Task.sendData(0, level, msg) : undefined,
+      params.enabledProgressReception ? (msg: string) => taskpool.Task.sendData(1, msg) : undefined,
     );
     return result;
   }

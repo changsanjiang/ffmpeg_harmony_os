@@ -20,7 +20,7 @@ static inline napi_value return_value(napi_env env, int result) {
 }
 
 napi_value
-native_exe_prepare(napi_env env, napi_callback_info info) {
+NAPI_ExePrepare(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     int execution_id_index = 0;
     napi_value args[argc];
@@ -42,7 +42,7 @@ native_exe_prepare(napi_env env, napi_callback_info info) {
 /// 1.	JavaScript 端：直接创建字符串数组并调用 N-API 函数。
 // 	2.	N-API 端：在接收端中，使用 napi_is_array 检查参数是否为数组，使用 napi_get_array_length 获取长度，接着通过 napi_get_element 逐一访问数组中的元素。
 napi_value
-native_exe_cmds(napi_env env, napi_callback_info info) {
+NAPI_ExeCommands(napi_env env, napi_callback_info info) {
     size_t argc = 4;
     int execution_id_index = 0;
     int cmds_index = 1;
@@ -118,7 +118,7 @@ native_exe_cmds(napi_env env, napi_callback_info info) {
 }
 
 napi_value
-native_exe_cancel(napi_env env, napi_callback_info info) { // info: (executionId: number)
+NAPI_ExeCancel(napi_env env, napi_callback_info info) { // info: (executionId: number)
     size_t argc = 1;
     int execution_id_index = 0;
     napi_value args[argc];

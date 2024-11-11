@@ -10,13 +10,13 @@
 
 EXTERN_C_START
 napi_value
-native_exe_prepare(napi_env env, napi_callback_info info); // info: (executionId: number)
+NAPI_ExePrepare(napi_env env, napi_callback_info info); // info: (executionId: number)
 
 napi_value
-native_exe_cmds(napi_env env, napi_callback_info info); // info: (executionId: number, cmds: string[], log_callback: (level, msg) => void, progress_callback: (msg) => void)
+NAPI_ExeCommands(napi_env env, napi_callback_info info); // info: (executionId: number, cmds: string[], log_callback: (level, msg) => void, progress_callback: (msg) => void)
 
 napi_value
-native_exe_cancel(napi_env env, napi_callback_info info); // info: (executionId: number)
+NAPI_ExeCancel(napi_env env, napi_callback_info info); // info: (executionId: number)
 EXTERN_C_END
 
 #endif //UTILITIES_EXECUTECOMMANDS_H

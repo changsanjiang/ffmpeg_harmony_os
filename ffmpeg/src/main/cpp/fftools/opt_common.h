@@ -229,5 +229,6 @@ int opt_cpucount(void *optctx, const char *opt, const char *arg);
     CMDUTILS_COMMON_OPTIONS_AVDEVICE                                                                                    \
 
 
-void set_log_callback(void);
+void log_set_callback(void);
+const char *log_get_level_name(int level);
 #endif /* FFTOOLS_OPT_COMMON_H */

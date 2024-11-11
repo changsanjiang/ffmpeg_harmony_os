@@ -67,6 +67,9 @@ _Thread_local AVDictionary *format_opts, *codec_opts;
 
 _Thread_local int hide_banner = 0;
 
+_Thread_local int print_prefix = 1;
+
+
 void uninit_opts(void)
 {
     av_dict_free(&swr_opts);
@@ -75,7 +78,7 @@ void uninit_opts(void)
     av_dict_free(&codec_opts);
 }
 
-static void log_sanitize(uint8_t *line){
+static void av_utils_log_sanitize(uint8_t *line){
     while(*line){
         if(*line < 0x08 || (*line > 0x0D && *line < 0x20))
             *line='?';
@@ -83,6 +86,67 @@ static void log_sanitize(uint8_t *line){
     }
 }
 
+static int av_utils_log_get_category(void *ptr){
+    AVClass *avc = *(AVClass **) ptr;
+    if(    !avc
+        || (avc->version&0xFF)<100
+        ||  avc->version < (51 << 16 | 59 << 8)
+        ||  avc->category >= AV_CLASS_CATEGORY_NB) return AV_CLASS_CATEGORY_NA + 16;
+
+    if(avc->get_category)
+        return avc->get_category(ptr) + 16;
+
+    return avc->category + 16;
+}
+
+static void av_utils_log_format_line(void *avcl, int level, int flags, const char *fmt, va_list vl,
+                        AVBPrint part[4], int *print_prefix, int type[2]) {
+    AVClass* avc = avcl ? *(AVClass **) avcl : NULL;
+    av_bprint_init(part+0, 0, AV_BPRINT_SIZE_AUTOMATIC);
+    av_bprint_init(part+1, 0, AV_BPRINT_SIZE_AUTOMATIC);
+    av_bprint_init(part+2, 0, AV_BPRINT_SIZE_AUTOMATIC);
+    av_bprint_init(part+3, 0, 65536);
+
+    if(type) type[0] = type[1] = AV_CLASS_CATEGORY_NA + 16;
+    if (*print_prefix && avc) {
+        if (avc->parent_log_context_offset) {
+            AVClass** parent = *(AVClass ***) (((uint8_t *) avcl) +
+                                   avc->parent_log_context_offset);
+            if (parent && *parent) {
+                av_bprintf(part+0, "[%s @ %p] ",
+                         (*parent)->item_name(parent), parent);
+                if(type) type[0] = av_utils_log_get_category(parent);
+            }
+        }
+        av_bprintf(part+1, "[%s @ %p] ",
+                 avc->item_name(avcl), avcl);
+        if(type) type[1] = av_utils_log_get_category(avcl);
+    }
+
+    if (*print_prefix && (level > AV_LOG_QUIET) && (flags & AV_LOG_PRINT_LEVEL))
+        av_bprintf(part+2, "[%s] ", log_get_level_name(level));
+
+    av_vbprintf(part+3, fmt, vl);
+
+    if(*part[0].str || *part[1].str || *part[2].str || *part[3].str) {
+        char lastc = part[3].len && part[3].len <= part[3].size ? part[3].str[part[3].len - 1] : 0;
+        *print_prefix = lastc == '\n' || lastc == '\r';
+    }
+}
+
+
+int av_utils_log_format_line2(void *ptr, int level, const char *fmt, va_list vl,
+                        char *line, int line_size, int *print_prefix)
+{
+    AVBPrint part[4];
+    int ret;
+
+    av_utils_log_format_line(ptr, level, program_log_flags, fmt, vl, part, print_prefix, NULL);
+    ret = snprintf(line, line_size, "%s%s%s%s", part[0].str, part[1].str, part[2].str, part[3].str);
+    av_bprint_finalize(part+3, NULL);
+    return ret;
+}
+    
 //
 // void log_callback_help(void *ptr, int level, const char *fmt, va_list vl)
 // {
@@ -90,19 +154,17 @@ static void log_sanitize(uint8_t *line){
 // }
 // void av_log_set_callback(void (*callback)(void*, int, const char*, va_list));
 void log_callback_help(void *ptr, int level, const char *fmt, va_list vl) {
-    int print_prefix = 0;
     char line[1024];
 
     if (level >= 0) {
         level &= 0xff;
     }
 
-    if (level > av_log_get_level())
+    if (level > program_log_level)
         return;
-    int ret = av_log_format_line2(ptr, level, fmt, vl, line, sizeof(line), &print_prefix);
-
+    int ret = av_utils_log_format_line2(ptr, level, fmt, vl, line, sizeof(line), &print_prefix);
     if ( ret > 0 ) {
-        log_sanitize((uint8_t *)line);
+        av_utils_log_sanitize((uint8_t *)line);
         native_log(level, line);
     }
 }
@@ -563,8 +625,10 @@ int opt_default(void *optctx, const char *opt, const char *arg)
     const AVClass *swr_class = swr_get_class();
 #endif
 
+//     if (!strcmp(opt, "debug") || !strcmp(opt, "fdebug"))
+//         av_log_set_level(AV_LOG_DEBUG);
     if (!strcmp(opt, "debug") || !strcmp(opt, "fdebug"))
-        av_log_set_level(AV_LOG_DEBUG);
+        program_log_level = AV_LOG_DEBUG;
 
     if (!(p = strchr(opt, ':')))
         p = opt + strlen(opt);

@@ -1,4 +1,3 @@
-#include "extension/log_level.h"
 #include "extension/execute_cmds.h"
 #include "napi/native_api.h"
 
@@ -10,7 +9,7 @@
 EXTERN_C_START
 
 extern napi_value 
-native_set_client_print_handler(napi_env env, napi_callback_info info);
+NAPI_SetClientPrintHandler(napi_env env, napi_callback_info info);
 
 static napi_value Init(napi_env env, napi_value exports)
 {
@@ -31,12 +30,10 @@ static napi_value Init(napi_env env, napi_value exports)
 //         •	napi_writable: 表示属性的值是可修改的（对于常量值，可能不设置此选项）。
 //         •	data: 大多数场景中可以为空，仅在回调函数中需要特定数据传递时使用。
     napi_property_descriptor desc[] = {
-        { "setPrintHandler", nullptr, native_set_client_print_handler, nullptr, nullptr, nullptr, napi_default, nullptr },
-        { "setLogLevel", nullptr, native_set_log_level, nullptr, nullptr, nullptr, napi_default, nullptr },
-        { "getLogLevel", nullptr, native_get_log_level, nullptr, nullptr, nullptr, napi_default, nullptr },
-        { "prepare", nullptr, native_exe_prepare, nullptr, nullptr, nullptr, napi_default, nullptr },
-        { "execute", nullptr, native_exe_cmds, nullptr, nullptr, nullptr, napi_default, nullptr },
-        { "cancel", nullptr, native_exe_cancel, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "setPrintHandler", nullptr, NAPI_SetClientPrintHandler, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "prepare", nullptr, NAPI_ExePrepare, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "execute", nullptr, NAPI_ExeCommands, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "cancel", nullptr, NAPI_ExeCancel, nullptr, nullptr, nullptr, napi_default, nullptr },
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;

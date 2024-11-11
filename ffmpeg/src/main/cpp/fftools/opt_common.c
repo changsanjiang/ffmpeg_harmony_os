@@ -26,6 +26,7 @@
 #include "opt_common.h"
 
 #include "extension/client_print.h"
+#include "fftools/thread_variables.h"
 #include "libavutil/avassert.h"
 #include "libavutil/avstring.h"
 #include "libavutil/bprint.h"
@@ -1181,7 +1182,7 @@ int init_report(const char *env, FILE **file)
         return AVERROR(ENOMEM);
     }
 
-    prog_loglevel = av_log_get_level();
+    prog_loglevel = program_log_level;
 //     if (!envlevel)
 //         report_file_level = FFMAX(report_file_level, prog_loglevel);
     report_file_level = prog_loglevel; // 日志等级采用全局配置的等级;
@@ -1245,8 +1246,10 @@ int opt_loglevel(void *optctx, const char *opt, const char *arg)
 {
     const char *token;
     char *tail;
-    int flags = av_log_get_flags();
-    int level = av_log_get_level();
+//     int flags = av_log_get_flags();
+//     int level = av_log_get_level();
+    int flags = program_log_flags;
+    int level = program_log_level;
     int cmd, i = 0;
 
     av_assert0(arg);
@@ -1282,7 +1285,7 @@ int opt_loglevel(void *optctx, const char *opt, const char *arg)
     } else if (*arg == '+') {
         arg++;
     } else if (!i) {
-        flags = av_log_get_flags();  /* level value without prefix, reset flags */
+        flags = program_log_flags;  /* level value without prefix, reset flags */
     }
 
     for (i = 0; i < FF_ARRAY_ELEMS(log_levels); i++) {
@@ -1302,8 +1305,10 @@ int opt_loglevel(void *optctx, const char *opt, const char *arg)
     }
 
 end:
-    av_log_set_flags(flags);
-    av_log_set_level(level);
+//     av_log_set_flags(flags);
+//     av_log_set_level(level);
+    program_log_flags = flags;
+    program_log_level = level;
     return 0;
 }
 
@@ -1399,10 +1404,12 @@ int show_sources(void *optctx, const char *opt, const char *arg)
     char *dev = NULL;
     AVDictionary *opts = NULL;
     int ret = 0;
-    int error_level = av_log_get_level();
+//     int error_level = av_log_get_level();
+    int error_level = program_log_level;
 
-    av_log_set_level(AV_LOG_WARNING);
-
+//     av_log_set_level(AV_LOG_WARNING);
+    program_log_level = AV_LOG_WARNING;
+    
     if ((ret = show_sinks_sources_parse_arg(arg, &dev, &opts)) < 0)
         goto fail;
 
@@ -1427,7 +1434,8 @@ int show_sources(void *optctx, const char *opt, const char *arg)
   fail:
     av_dict_free(&opts);
     av_free(dev);
-    av_log_set_level(error_level);
+//     av_log_set_level(error_level);
+    program_log_level = error_level;
     return ret;
 }
 
@@ -1437,9 +1445,11 @@ int show_sinks(void *optctx, const char *opt, const char *arg)
     char *dev = NULL;
     AVDictionary *opts = NULL;
     int ret = 0;
-    int error_level = av_log_get_level();
+//     int error_level = av_log_get_level();
+    int error_level = program_log_level;
 
-    av_log_set_level(AV_LOG_WARNING);
+//     av_log_set_level(AV_LOG_WARNING);
+    program_log_level = AV_LOG_WARNING;
 
     if ((ret = show_sinks_sources_parse_arg(arg, &dev, &opts)) < 0)
         goto fail;
@@ -1463,15 +1473,16 @@ int show_sinks(void *optctx, const char *opt, const char *arg)
   fail:
     av_dict_free(&opts);
     av_free(dev);
-    av_log_set_level(error_level);
+//     av_log_set_level(error_level);
+    program_log_level = error_level;
     return ret;
 }
 
-void set_log_callback(void) {
+void log_set_callback(void) {
     av_log_set_callback(log_callback_help);
 }
 
-int native_log_get_level_by_name(const char *name) {
+int log_get_level_by_name(const char *name) {
     for (int i = 0; i < FF_ARRAY_ELEMS(log_levels); i++) {
         if (!strcmp(log_levels[i].name, name)) {
             return log_levels[i].level;
@@ -1480,16 +1491,12 @@ int native_log_get_level_by_name(const char *name) {
     return 0;
 }
 
-const char *native_log_get_level_name(int level) {
+const char *log_get_level_name(int level) {
     for (int i = 0; i < FF_ARRAY_ELEMS(log_levels); i++) {
         if ( level == log_levels[i].level ) {
             return log_levels[i].name;
         }
     }
-    return NULL;
-}
-
-int native_log_get_level(void) {
-    return av_log_get_level();
+    return "";
 }
 #endif /* CONFIG_AVDEVICE */

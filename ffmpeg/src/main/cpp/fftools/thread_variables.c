@@ -5,6 +5,7 @@
 // please include "napi/native_api.h".
 
 #include "thread_variables.h"
+#include "libavutil/log.h"
 #include <stdio.h>
 
 _Thread_local jmp_buf exit_jump_buffer;
@@ -21,3 +22,16 @@ _Thread_local const char *program_name = NULL;
  * program birth year, defined by the program for show_banner()
  */
 _Thread_local int program_birth_year = 0;
+
+/**
+ * +/-repeat: 跳过/不跳过重复日志
+ * +/-level: 显示/不显示日志级别前缀
+ * 
+ * - 此命令会输出 debug 级别以上的日志，显示日志级别前缀，并跳过重复日志。
+ *      ffmpeg -loglevel +repeat+leveldebug
+ * 
+ * - 此命令会输出 info 级别以上的日志，不会跳过重复日志，但会显示日志级别前缀。
+ *      ffmpeg -loglevel -repeat+levelinfo
+ * */
+_Thread_local int program_log_level = AV_LOG_INFO;
+_Thread_local int program_log_flags = AV_LOG_SKIP_REPEATED;
