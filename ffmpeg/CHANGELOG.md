@@ -1,5 +1,4 @@
 #### [v1.0.2] 2024/11
-- 日志等级改为全局配置, 可选值为`'quiet' | 'panic' | 'fatal' | 'error' | 'warning' | 'info' | 'verbose' | 'debug' | 'trace';`;
 - 新增 progressCallback, 回调值结构如下:
   - frame=61
   - fps=0.00

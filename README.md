@@ -3,8 +3,13 @@
 目前移植了 fftools/ffmpeg, 可以在App中执行 ffmpeg 相关的脚本命令;
 
 #### 安装
+```shell
+ohpm i @sj/ffmpeg
+```
 
-在需要依赖的模块找到 oh-package.json5 文件, 新增如下依赖, 执行同步后等待安装完成;
+#### 在项目中引用
+
+请在需要依赖的模块找到 oh-package.json5 文件, 新增如下依赖, 执行同步后等待安装完成;
 ```json
 {
   "dependencies": {
@@ -47,30 +52,3 @@
       console.error(`FFmpeg execution failed with error: ${error.message}`);
     });
     ```
-
-#### 设置日志等级
-
-- 日志等级为全局配置, 可选值如下:
-  - quiet：禁用所有日志输出，不显示任何信息。
-  - panic：仅显示 panic 级别的错误，通常是严重的内部错误，导致程序无法继续执行。
-  - fatal：显示 fatal 错误，表示严重错误，导致程序退出。
-  - error：显示错误信息，程序可能会继续执行，但需要处理错误。
-  - warning：显示警告信息，表示潜在问题，但不会影响程序继续执行。
-  - info：显示一般信息，包含较为简洁的程序输出。
-  - verbose：显示详细信息，通常包含更多的调试信息。
-  - debug：显示最详细的调试信息，用于开发和调试过程。
-  - trace：显示最详细的跟踪信息，记录每个细节和操作，通常用于极其详细的调试和分析。
-
-- 通过`setLogLevel`设置日志等级:
-  ```ts
-  import { FFmpeg } from '@sj/ffmpeg';
-  
-  FFmpeg.setLogLevel('info');
-  ``` 
-
-- 通过`getLogLevel`获取当前日志等级, 默认值 'info':
-  ```ts
-  import { FFmpeg } from '@sj/ffmpeg';
-  
-  let level = FFmpeg.getLogLevel('info');
-  ```
