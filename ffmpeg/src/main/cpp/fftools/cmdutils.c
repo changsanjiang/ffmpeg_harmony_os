@@ -798,7 +798,7 @@ int split_commandline(OptionParseContext *octx, int argc, char *argv[],
     int dashdash = -2;
 
     /* perform system-dependent conversions for arguments list */
-    prepare_app_arguments(&argc, &argv);
+//     prepare_app_arguments(&argc, &argv);
 
     init_parse_context(octx, groups, nb_groups);
     av_log(NULL, AV_LOG_DEBUG, "Splitting the commandline.\n");
@@ -845,7 +845,7 @@ do {                                                                           \
         if (po->name) {
             if (po->flags & OPT_EXIT) {
                 /* optional argument, e.g. -h */
-                arg = argv[optindex++];
+                arg = optindex < argc ? argv[optindex++] : NULL;
             } else if (po->flags & HAS_ARG) {
                 GET_ARG(arg);
             } else {

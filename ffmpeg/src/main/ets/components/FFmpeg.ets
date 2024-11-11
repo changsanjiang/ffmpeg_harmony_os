@@ -4,7 +4,7 @@ import { FFAbortSignal } from './FFAbortController';
 import BuildProfile from '../../../../BuildProfile';
 
 namespace FFmpeg {
-  interface Options {
+  export interface Options {
     logCallback?: (level: number, msg: string) => void
     progressCallback?: (msg: string) => void
     signal?: FFAbortSignal
