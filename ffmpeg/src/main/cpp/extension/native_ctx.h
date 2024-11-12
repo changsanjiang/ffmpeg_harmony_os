@@ -10,7 +10,7 @@
 
 EXTERN_C_START
 void 
-native_ctx_init(napi_env env, napi_ref log_callback_ref, napi_ref progress_callback_ref); 
+native_ctx_init(napi_env env, napi_ref log_callback_ref, napi_ref progress_callback_ref, napi_ref output_callback_ref); 
 
 napi_env
 native_ctx_get_env(void);
@@ -20,6 +20,9 @@ native_ctx_get_log_callback_ref(void); // log_callback_ref: (level, msg) => {};
 
 napi_ref
 native_ctx_get_progress_callback_ref(void); // progress_callback_ref: (msg) => {};
+
+napi_ref
+native_ctx_get_output_callback_ref(void); // output_callback_ref: (msg) => {};
 
 void 
 native_ctx_destroy(void);

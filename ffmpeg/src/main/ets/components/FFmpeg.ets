@@ -6,14 +6,17 @@ import BuildProfile from '../../../../BuildProfile';
 namespace FFmpeg {
   export interface Options {
     logCallback?: (level: number, msg: string) => void
-    progressCallback?: (msg: string) => void
+    progressCallback?: (msg: string) => void // progressCallback for ffmpeg; 注意: 这个是 ffmpeg 进度消息的回调, 请在执行 ffmpeg 命令时设置;
+    outputCallback?: (msg: string) => void // outputCallback for ffprobe; 注意: 这个是 ffprobe 输出消息的回调, 请在执行 ffprobe 命令时设置;
     signal?: FFAbortSignal
   }
 
   /**
    * 执行脚本命令;
    *
-   * 例如: FFmpeg.execute(["ffmpeg", "-i", inputPath, outputPath, "-y"]);
+   * 例如:
+   * - 执行 ffmpeg 命令: FFmpeg.execute(["ffmpeg", "-i", inputPath, outputPath, "-y"]);
+   * - 执行 ffprobe 命令: FFmpeg.execute(["ffprobe", "-v", "info", "-of", "json", "-show_entries", "stream=sample_rate,bit_rate", "-i", inputPath]);
    *
    * \code
    * let abortController = new FFAbortController(); // 如执行过程中需要取消, 可创建 abortController 来控制取消操作;
@@ -35,20 +38,32 @@ namespace FFmpeg {
       const executionId = await generateExecutionId();
       ffmpeg.prepare(executionId);
       options?.signal?.addEventListener('aborted', () => ffmpeg.cancel(executionId));
-      const task = new taskpool.Task(performTask, new ExecutionParams(executionId, commands, options?.logCallback != undefined, options?.progressCallback != undefined));
+
       const logCallback = options?.logCallback;
       const progressCallback = options?.progressCallback;
-      if ( logCallback || progressCallback ) {
+      const outputCallback = options?.outputCallback;
+      const task = new taskpool.Task(performTask, new ExecutionParams(
+        executionId,
+        commands,
+        logCallback != undefined,
+        progressCallback != undefined,
+        outputCallback != undefined,
+      ));
+      if ( logCallback || progressCallback || outputCallback ) {
         task.onReceiveData((type: number, ...args: Object[]) => {
           switch (type) {
             case 0: {
               if ( logCallback ) logCallback(args[0] as number, args[1] as string);
-              break;
             }
+              break;
             case 1: {
               if ( progressCallback ) progressCallback(args[0] as string);
-              break;
             }
+              break;
+            case 2: {
+              if ( outputCallback ) outputCallback(args[0] as string);
+            }
+              break;
           }
         });
       }
@@ -85,13 +100,15 @@ namespace FFmpeg {
   class ExecutionParams {
     executionId: number;
     commands: string[];
-    enabledLogReception: boolean;
-    enabledProgressReception: boolean;
-    constructor(executionId: number, commands: string[], enabledLogReception: boolean, enabledProgressReception: boolean) {
+    enabledLogCallback: boolean;
+    enabledProgressCallback: boolean;
+    enabledOutputCallback: boolean;
+    constructor(executionId: number, commands: string[], enabledLogCallback: boolean, enabledProgressCallback: boolean, enabledOutputCallback: boolean) {
       this.executionId = executionId;
       this.commands = commands;
-      this.enabledLogReception = enabledLogReception;
-      this.enabledProgressReception = enabledProgressReception;
+      this.enabledLogCallback = enabledLogCallback;
+      this.enabledProgressCallback = enabledProgressCallback;
+      this.enabledOutputCallback = enabledOutputCallback;
     }
   }
 
@@ -100,8 +117,9 @@ namespace FFmpeg {
     const result = ffmpeg.execute(
       params.executionId,
       params.commands,
-      params.enabledLogReception ? (level: number, msg: string) => taskpool.Task.sendData(0, level, msg) : undefined,
-      params.enabledProgressReception ? (msg: string) => taskpool.Task.sendData(1, msg) : undefined,
+      params.enabledLogCallback ? (level: number, msg: string) => taskpool.Task.sendData(0, level, msg) : undefined,
+      params.enabledProgressCallback ? (msg: string) => taskpool.Task.sendData(1, msg) : undefined,
+      params.enabledOutputCallback ? (msg: string) => taskpool.Task.sendData(2, msg) : undefined,
     );
     return result;
   }

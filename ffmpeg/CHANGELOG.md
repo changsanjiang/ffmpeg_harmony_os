@@ -1,3 +1,8 @@
+#### [v1.0.3] 2024/11
+- 移植 fftools/ffprobe; 可以执行 ffprobe 相关的脚本命令了;
+  - FFmpeg.Options 新增`outputCallback`, 用于 ffprobe 输出消息时的回调, 只有在执行 ffprobe 命令时才会回调;
+  - 通过执行`FFmpeg.execute(["ffprobe", "--help"], ...)`获取帮助信息;
+
 #### [v1.0.2] 2024/11
 - 新增 progressCallback, 回调值结构如下:
   - frame=61

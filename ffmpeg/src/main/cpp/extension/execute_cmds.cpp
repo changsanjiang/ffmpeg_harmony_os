@@ -45,11 +45,12 @@ NAPI_ExePrepare(napi_env env, napi_callback_info info) {
 // 	2.	N-API 端：在接收端中，使用 napi_is_array 检查参数是否为数组，使用 napi_get_array_length 获取长度，接着通过 napi_get_element 逐一访问数组中的元素。
 napi_value
 NAPI_ExeCommands(napi_env env, napi_callback_info info) {
-    size_t argc = 4;
+    size_t argc = 5;
     int execution_id_index = 0;
     int cmds_index = 1;
     int log_callback_index = 2;
     int progress_callback_index = 3;
+    int output_callback_index = 4;
     
     napi_value args[argc];
 
@@ -95,19 +96,29 @@ NAPI_ExeCommands(napi_env env, napi_callback_info info) {
         cmds[i] = cStr;
     }
     
-    // 获取日志回调函数
-    napi_ref log_callback_ref;
-    napi_create_reference(env, args[log_callback_index], 1, &log_callback_ref);
+    bool is_ffmpeg = !strcmp(cmds[0], "ffmpeg");
+    bool is_ffprobe = !is_ffmpeg && !strcmp(cmds[0], "ffprobe");
+    if ( !is_ffmpeg && !is_ffprobe ) {
+        napi_throw_error(env, nullptr, "Invalid command. Supported commands are 'ffmpeg' and 'ffprobe'. Please check the command name and try again.");
+    }
     
-    // 获取进度回调函数
-    napi_ref progress_callback_ref;
-    napi_create_reference(env, args[progress_callback_index], 1, &progress_callback_ref);
+    // 日志回调函数
+    napi_ref log_callback_ref;
+    // ffmpeg 进度回调函数
+    napi_ref progress_callback_ref = NULL;
+    // ffprobe 输出回调函数
+    napi_ref output_callback_ref = NULL;
+    
+    napi_create_reference(env, args[log_callback_index], 1, &log_callback_ref);
+    is_ffmpeg ? napi_create_reference(env, args[progress_callback_index], 1, &progress_callback_ref) :
+                napi_create_reference(env, args[output_callback_index], 1, &output_callback_ref);
     
     // 初始化执行上下文
-    native_ctx_init(env, log_callback_ref, progress_callback_ref);
+    native_ctx_init(env, log_callback_ref, progress_callback_ref, output_callback_ref);
 
     // 开始执行命令
-    int result = !strcmp(cmds[0], "ffmpeg") ? ffmpeg_main(&task->is_running, cmd_count, cmds) : ffporbe_main(&task->is_running, cmd_count, cmds);
+    int result = is_ffmpeg ? ffmpeg_main(&task->is_running, cmd_count, cmds) : 
+                             ffporbe_main(&task->is_running, cmd_count, cmds);
     
     // 任务完毕 释放内存
     for (uint32_t i = 0; i < cmd_count; i++) {

@@ -24,6 +24,8 @@
  */
 
 #include "config.h"
+#include "extension/output_callback.h"
+#include "extension/utils.h"
 #include "fftools/fftools_common.h"
 #include "libavutil/ffversion.h"
 
@@ -593,38 +595,68 @@ static void bprint_bytes(AVBPrint *bp, const uint8_t *ubuf, size_t ubuf_size)
 static inline void writer_w8_avio(WriterContext *wctx, int b)
 {
     avio_w8(wctx->avio, b);
+
+    char str[2];  
+    snprintf(str, sizeof(str), "%c", b);  
+    native_report_output(str);
 }
 
 static inline void writer_put_str_avio(WriterContext *wctx, const char *str)
 {
     avio_write(wctx->avio, str, strlen(str));
+
+    native_report_output(str);
 }
 
 static inline void writer_printf_avio(WriterContext *wctx, const char *fmt, ...)
 {
     va_list ap;
+    va_list ap_copy;
 
     va_start(ap, fmt);
+    va_copy(ap_copy, ap);
     avio_vprintf(wctx->avio, fmt, ap);
+
+    char *str = native_string_create(fmt, ap_copy);
+    if ( str ) {
+        native_report_output(str); 
+        native_string_free(&str);
+    } 
+    va_end(ap_copy);
     va_end(ap);
 }
 
 static inline void writer_w8_printf(WriterContext *wctx, int b)
 {
     av_log(NULL, AV_LOG_INFO, "%c", b);
+
+    char str[2];  
+    snprintf(str, sizeof(str), "%c", b);  
+    native_report_output(str);
 }
 
 static inline void writer_put_str_printf(WriterContext *wctx, const char *str)
 {
     av_log(NULL, AV_LOG_INFO, "%s", str);
+
+    native_report_output(str);
 }
 
 static inline void writer_printf_printf(WriterContext *wctx, const char *fmt, ...)
 {
     va_list ap;
+    va_list ap_copy;
 
     va_start(ap, fmt);
+    va_copy(ap_copy, ap);
     av_vlog(NULL, AV_LOG_INFO, fmt, ap);
+
+    char *str = native_string_create(fmt, ap_copy);
+    if ( str ) {
+        native_report_output(str); 
+        native_string_free(&str);
+    } 
+    va_end(ap_copy);
     va_end(ap);
 }
 
