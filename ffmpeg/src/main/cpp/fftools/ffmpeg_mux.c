@@ -481,7 +481,7 @@ static int print_sdp(void)
         goto fail;
 
     if (!sdp_filename) {
-        av_log(NULL, AV_LOG_ERROR, "SDP:\n%s\n", sdp);
+        av_log(NULL, AV_LOG_INFO, "SDP:\n%s\n", sdp);
         fflush(stdout);
     } else {
         ret = avio_open2(&sdp_pb, sdp_filename, AVIO_FLAG_WRITE, &int_cb, NULL);

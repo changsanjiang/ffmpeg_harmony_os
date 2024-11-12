@@ -27,6 +27,7 @@
 #include "extension/client_print.h"
 #include "extension/progress_callback.h"
 #include "extension/task.h"
+#include "fftools/fftools_common.h"
 #include "fftools/opt_common.h"
 #include "fftools/thread_variables.h"
 #include <ctype.h>
@@ -516,7 +517,7 @@ static int decode_interrupt_cb(void *ctx)
 
 _Thread_local AVIOInterruptCB int_cb;
 
-static void ffmpeg_cleanup(int ret)
+void ffmpeg_cleanup(int ret)
 {
     int i, j;
 
@@ -4152,22 +4153,6 @@ static int64_t getmaxrss(void)
 #endif
 }
 
-static pthread_once_t ffmpeg_init_once = PTHREAD_ONCE_INIT;
-void ffmpeg_init(void) {
-//     init_dynload();
-
-    register_exit(ffmpeg_cleanup);
-    log_set_callback();
-
-//     setvbuf(stderr,NULL,_IONBF,0); /* win32 runtime needs this */
-//     av_log_set_flags(AV_LOG_SKIP_REPEATED);
-
-#if CONFIG_AVDEVICE
-    avdevice_register_all();
-#endif
-    avformat_network_init();
-}
-
 OptionDef *opt_get_ffmpeg_options(void);
 
 static void ffmpeg_reset_thread_variables(void) {
@@ -4213,15 +4198,16 @@ int ffmpeg_main(_Atomic bool *is_running, int argc, char **argv)
         return 1;
     }
 
-    int_cb = (AVIOInterruptCB){ decode_interrupt_cb, is_running };
-    
     program_name = ffmpeg_program_name;
     program_birth_year = ffmpeg_program_birth_year; 
+
+    fftools_init();
+
+    int_cb = (AVIOInterruptCB){ decode_interrupt_cb, is_running };
+    ffmpeg_reset_thread_variables();
     
     int ret;
     BenchmarkTimeStamps ti;
-    ffmpeg_reset_thread_variables();
-    strict_pthread_once(&ffmpeg_init_once, ffmpeg_init);
     options = opt_get_ffmpeg_options();
     if ( setjmp(exit_jump_buffer) == 0 ) {
         parse_loglevel(argc, argv, options);

@@ -19,4 +19,6 @@ extern _Thread_local OptionDef *options;
 
 extern _Thread_local int program_log_level;
 extern _Thread_local int program_log_flags;
+
+extern _Thread_local const char *program_name;
 #endif //UTILITIES_THREAD_VARIABLES_H

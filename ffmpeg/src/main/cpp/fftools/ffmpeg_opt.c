@@ -156,11 +156,11 @@ static int show_hwaccels(void *optctx, const char *opt, const char *arg)
 {
     enum AVHWDeviceType type = AV_HWDEVICE_TYPE_NONE;
 
-    av_log(NULL, AV_LOG_ERROR, "Hardware acceleration methods:\n");
+    av_log(NULL, AV_LOG_INFO, "Hardware acceleration methods:\n");
     while ((type = av_hwdevice_iterate_types(type)) !=
            AV_HWDEVICE_TYPE_NONE)
-        av_log(NULL, AV_LOG_ERROR, "%s\n", av_hwdevice_get_type_name(type));
-    av_log(NULL, AV_LOG_ERROR, "\n");
+        av_log(NULL, AV_LOG_INFO, "%s\n", av_hwdevice_get_type_name(type));
+    av_log(NULL, AV_LOG_INFO, "\n");
     return 0;
 }
 
@@ -1132,7 +1132,7 @@ static int opt_filter_complex_script(void *optctx, const char *opt, const char *
     return 0;
 }
 
-void show_help_default(const char *opt, const char *arg)
+void show_help_default_ffmpeg(const char *opt, const char *arg)
 {
     /* per-file options have at least one of those set */
     const int per_file = OPT_SPEC | OPT_OFFSET | OPT_PERFILE;
@@ -1149,7 +1149,7 @@ void show_help_default(const char *opt, const char *arg)
 
     show_usage();
 
-    av_log(NULL, AV_LOG_ERROR, "Getting help:\n"
+    av_log(NULL, AV_LOG_INFO, "Getting help:\n"
            "    -h      -- print basic options\n"
            "    -h long -- print more options\n"
            "    -h full -- print all options (including all format and codec specific options, very long)\n"
@@ -1187,7 +1187,7 @@ void show_help_default(const char *opt, const char *arg)
                           OPT_EXPERT | OPT_AUDIO, OPT_VIDEO, 0);
     show_help_options(options, "Subtitle options:",
                       OPT_SUBTITLE, 0, 0);
-    av_log(NULL, AV_LOG_ERROR, "\n");
+    av_log(NULL, AV_LOG_INFO, "\n");
 
     if (show_avoptions) {
         int flags = AV_OPT_FLAG_DECODING_PARAM | AV_OPT_FLAG_ENCODING_PARAM;

@@ -154,6 +154,8 @@ int av_utils_log_format_line2(void *ptr, int level, const char *fmt, va_list vl,
 // }
 // void av_log_set_callback(void (*callback)(void*, int, const char*, va_list));
 void log_callback_help(void *ptr, int level, const char *fmt, va_list vl) {
+    if ( !program_name ) return; // TODO: 子线程的日志暂时忽略, 后续寻找方案记录日志;
+    
     char line[1024];
 
     if (level >= 0) {
@@ -162,6 +164,7 @@ void log_callback_help(void *ptr, int level, const char *fmt, va_list vl) {
 
     if (level > program_log_level)
         return;
+    
     int ret = av_utils_log_format_line2(ptr, level, fmt, vl, line, sizeof(line), &print_prefix);
     if ( ret > 0 ) {
         av_utils_log_sanitize((uint8_t *)line);
@@ -178,11 +181,20 @@ void init_dynload(void)
 #endif
 }
 
-static void (*program_exit)(int ret);
+// static void (*program_exit)(int ret);
+static void (*ffmpeg_program_exit)(int ret);
+static void (*ffprobe_program_exit)(int ret);
 
-void register_exit(void (*cb)(int ret))
-{
-    program_exit = cb;
+// void register_exit(void (*cb)(int ret))
+// {
+//     program_exit = cb;
+// }
+
+void register_ffmpeg_exit(void (*cb)(int ret)) {
+    ffmpeg_program_exit = cb;
+}
+void register_ffprobe_exit(void (*cb)(int ret)) {
+    ffprobe_program_exit = cb;
 }
 
 void report_and_exit(int ret)
@@ -193,8 +205,16 @@ void report_and_exit(int ret)
 
 void exit_program(int ret)
 {
-    if (program_exit)
-        program_exit(ret);
+        
+//     if (program_exit)
+//         program_exit(ret);
+    
+    if ( !strcmp(program_name, "ffmpeg") ) {
+        if ( ffmpeg_program_exit ) ffmpeg_program_exit(ret);
+    }
+    else if ( !strcmp(program_name, "ffprobe") ) {
+        if ( ffprobe_program_exit ) ffprobe_program_exit(ret);
+    }
 
     // exit disabled and replaced with longjmp, exit value stored in exit_value;
     // exit(ret);
@@ -251,7 +271,7 @@ void show_help_options(const OptionDef *options, const char *msg, int req_flags,
             continue;
 
         if (first) {
-            av_log(NULL, AV_LOG_ERROR, "%s\n", msg);
+            av_log(NULL, AV_LOG_INFO, "%s\n", msg);
             first = 0;
         }
         av_strlcpy(buf, po->name, sizeof(buf));
@@ -259,9 +279,9 @@ void show_help_options(const OptionDef *options, const char *msg, int req_flags,
             av_strlcat(buf, " ", sizeof(buf));
             av_strlcat(buf, po->argname, sizeof(buf));
         }
-        av_log(NULL, AV_LOG_ERROR, "-%-17s  %s\n", buf, po->help);
+        av_log(NULL, AV_LOG_INFO, "-%-17s  %s\n", buf, po->help);
     }
-    av_log(NULL, AV_LOG_ERROR, "\n");
+    av_log(NULL, AV_LOG_INFO, "\n");
 }
 
 void show_help_children(const AVClass *class, int flags)
@@ -270,7 +290,7 @@ void show_help_children(const AVClass *class, int flags)
     const AVClass *child;
     if (class->option) {
         av_opt_show2(&class, NULL, flags, 0);
-        av_log(NULL, AV_LOG_ERROR, "\n");
+        av_log(NULL, AV_LOG_INFO, "\n");
     }
 
     while ((child = av_opt_child_class_iterate(class, &iter)))
@@ -466,8 +486,9 @@ void parse_options(void *optctx, int argc, char **argv, const OptionDef *options
                 continue;
             }
             opt++;
-
-            if ((ret = parse_option(optctx, opt, argv[optindex], options)) < 0)
+            
+            const char *arg = optindex < argc ? argv[optindex] : NULL;
+            if ((ret = parse_option(optctx, opt, arg, options)) < 0)
                 exit_program(1);
             optindex += ret;
         } else {
@@ -581,7 +602,7 @@ void parse_loglevel(int argc, char **argv, const OptionDef *options)
     if (idx && argv[idx + 1])
         opt_loglevel(NULL, "loglevel", argv[idx + 1]);
     idx = locate_option(argc, argv, options, "report");
-    env = getenv_utf8("FFREPORT");
+    env = NULL;// getenv_utf8("FFREPORT"); // 不会有 env;
     if (env || idx) {
         FILE *report_file = NULL;
         init_report(env, &report_file);

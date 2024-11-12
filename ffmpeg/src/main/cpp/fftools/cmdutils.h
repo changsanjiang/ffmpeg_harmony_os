@@ -55,7 +55,10 @@ extern _Thread_local int print_prefix;
 /**
  * Register a program-specific cleanup routine.
  */
-void register_exit(void (*cb)(int ret));
+// void register_exit(void (*cb)(int ret));
+
+void register_ffmpeg_exit(void (*cb)(int ret));
+void register_ffprobe_exit(void (*cb)(int ret));
 
 /**
  * Reports an error corresponding to the provided

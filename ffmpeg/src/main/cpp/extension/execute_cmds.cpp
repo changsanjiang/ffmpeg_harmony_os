@@ -9,9 +9,11 @@
 #include "extension/task_mgr.h"
 #include "native_ctx.h"
 #include <cstdint>
+#include <cstring>
 
 EXTERN_C_START
 int ffmpeg_main(_Atomic bool *is_running, int argc, char **argv);
+int ffporbe_main(_Atomic bool *is_running, int argc, char **argv);
 
 static inline napi_value return_value(napi_env env, int result) {
     napi_value ret_value;
@@ -105,7 +107,8 @@ NAPI_ExeCommands(napi_env env, napi_callback_info info) {
     native_ctx_init(env, log_callback_ref, progress_callback_ref);
 
     // 开始执行命令
-    int result = ffmpeg_main(&task->is_running, cmd_count, cmds);
+    int result = !strcmp(cmds[0], "ffmpeg") ? ffmpeg_main(&task->is_running, cmd_count, cmds) : ffporbe_main(&task->is_running, cmd_count, cmds);
+    
     // 任务完毕 释放内存
     for (uint32_t i = 0; i < cmd_count; i++) {
         delete[] cmds[i];
