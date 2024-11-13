@@ -1,10 +1,13 @@
 import { FFAbortController, FFmpeg, FFProgressMessageParser } from '@sj/ffmpeg';
+import { fileIo } from '@kit.CoreFileKit';
 
 @Entry
 @Component
 struct Index {
   @State message: string = 'Hello World';
   @State show: boolean = false
+
+  private inputPath = getContext(this).filesDir + '/input.mp4';
 
   build() {
     RelativeContainer() {
@@ -22,17 +25,15 @@ struct Index {
             // let commands = ["ffmpeg", "--help"];
             // let commands = ["ffprobe", "--help"];
             let cacheDir = getContext(this).cacheDir;
+            let inputPath = this.inputPath; // 输入文件的路径, 可以是本地路径也可以是远程路径;
             let outputPath = cacheDir + `/output_${index}.mp4`;
-            let commands = ["ffmpeg", "-i", "https://dh2.v.netease.com/2017/cg/fxtpty.mp4", outputPath, "-y", "-v", "info"];
-            let abortController = new FFAbortController(); // 创建 abortController, 在需要时终止脚本执行;
-            setTimeout(() => abortController.abort(), 4000); // 模拟取消; 这里模拟取消, 延迟4s后取消操作;
+            let commands = ["ffmpeg", "-i", inputPath, outputPath, "-y", "-v", "info"];
 
             FFmpeg.execute(commands, {
               logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
               progressCallback: (message: string) => console.log(`[progress]${JSON.stringify(FFProgressMessageParser.parse(message))}`),
-              signal: abortController.signal //  传入 abortController.signal, 内部会监听取消信号;
             }).then(() => {
-              console.info(`Execution succeeded`);
+              console.info(`Execution succeeded with outputPath: ${outputPath}`);
             }).catch((error: Error) => {
               console.error(`Execution failed with error: ${error.message}`);
             });
@@ -41,5 +42,19 @@ struct Index {
     }
     .height('100%')
     .width('100%')
+  }
+
+  aboutToAppear(): void {
+    // 把示例mp4复制到文件目录下;
+    fileIo.access(this.inputPath, fileIo.AccessModeType.EXIST).then((exists) => {
+      if ( !exists ) {
+        getContext(this).resourceManager.getRawFileContent('input.mp4', (_err, value) => {
+          let myBuffer: ArrayBufferLike = value.buffer;
+          let file = fileIo.openSync(this.inputPath, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE);
+          fileIo.writeSync(file.fd, myBuffer);
+          fileIo.closeSync(file);
+        });
+      }
+    });
   }
 }
