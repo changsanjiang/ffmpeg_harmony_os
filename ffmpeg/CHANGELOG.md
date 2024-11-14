@@ -1,3 +1,7 @@
+#### [v1.0.5] 2024/11
+- 为`ffmpeg_hw.c`中的 static 变量添加 _Thread_local;
+- 添加gpl声明;
+
 #### [v1.0.4] 2024/11
 - 增加 lame, libaom, libogg,libvorbis, opus, x264 等编码器;
 - 由于开启了gpl选项, 所以许可证修改为 GPL-3.0;
