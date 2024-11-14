@@ -1,10 +1,10 @@
 {
   "name": "@sj/ffmpeg",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "FFmpeg for HarmonyOS.",
   "main": "Index.ets",
   "author": "csj",
-  "license": "LGPL v2.1 or later",
+  "license": "GPL-3.0",
   "dependencies": {
     "libffmpeg.so": "file:./src/main/cpp/types/libffmpeg"
   },
