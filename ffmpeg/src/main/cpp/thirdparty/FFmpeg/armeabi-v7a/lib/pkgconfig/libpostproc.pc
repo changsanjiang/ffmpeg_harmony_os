@@ -1,0 +1,14 @@
+prefix=/Users/db/.ohos/lycium/usr/FFmpeg/armeabi-v7a
+exec_prefix=${prefix}
+libdir=/Users/db/.ohos/lycium/usr/FFmpeg/armeabi-v7a/lib
+includedir=/Users/db/.ohos/lycium/usr/FFmpeg/armeabi-v7a/include
+
+Name: libpostproc
+Description: FFmpeg postprocessing library
+Version: 57.1.100
+Requires: 
+Requires.private: libavutil >= 58.2.100
+Conflicts:
+Libs: -L${libdir}  -lpostproc 
+Libs.private: -lm
+Cflags: -I${includedir}

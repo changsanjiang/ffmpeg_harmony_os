@@ -6,8 +6,10 @@ import BuildProfile from '../../../../BuildProfile';
 namespace FFmpeg {
   export interface Options {
     logCallback?: (level: number, msg: string) => void
-    progressCallback?: (msg: string) => void // progressCallback for ffmpeg; 注意: 这个是 ffmpeg 进度消息的回调, 请在执行 ffmpeg 命令时设置;
-    outputCallback?: (msg: string) => void // outputCallback for ffprobe; 注意: 这个是 ffprobe 输出消息的回调, 请在执行 ffprobe 命令时设置;
+    /** 这个回调是 ffmpeg 进度消息的回调, 请在执行 ffmpeg 命令时设置; */
+    progressCallback?: (msg: string) => void
+    /** 这个回调是 ffprobe 输出消息的回调, 请在执行 ffprobe 命令时设置; */
+    outputCallback?: (msg: string) => void
     signal?: FFAbortSignal
   }
 
@@ -67,7 +69,7 @@ namespace FFmpeg {
           }
         });
       }
-      let result = await taskpool.execute(task) as number;
+      const result = await taskpool.execute(task) as number;
       return result == 0 ? Promise.resolve() : Promise.reject(createError(result));
     }
     catch (e) {
