@@ -6,7 +6,8 @@
   "author": "",
   "license": "",
   "dependencies": {
-    "@sj/ffmpeg": "file:../ffmpeg"
+    "@sj/ffmpeg": "file:../ffmpeg",
+    "@sj/filemgr": "file:../filemgr"
   }
 }
 

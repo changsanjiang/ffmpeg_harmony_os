@@ -1,0 +1,1 @@
+export const getPathFromUri: (uri: string) => string | undefined;

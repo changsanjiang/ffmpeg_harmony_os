@@ -1,0 +1,11 @@
+{
+  "module": {
+    "name": "filemgr",
+    "type": "har",
+    "deviceTypes": [
+      "default",
+      "tablet",
+      "2in1"
+    ]
+  }
+}
