@@ -15,7 +15,7 @@ struct Index {
     RelativeContainer() {
       Text(this.message)
         .id('HelloWorld')
-        .fontSize(50)
+        .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .alignRules({
           center: { anchor: '__container__', align: VerticalAlign.Center },
@@ -87,7 +87,7 @@ struct Index {
           console.log(`[progress]${JSON.stringify(FFProgressMessageParser.parse(message))}`);
         },
       }).then(() => {
-        this.message = "已完成";
+        this.message = "已完成:" + outputPath;
         console.info(`Execution succeeded with outputPath: ${outputPath}`);
       }).catch((error: Error) => {
         console.error(`Execution failed with error: ${error.message}`);
