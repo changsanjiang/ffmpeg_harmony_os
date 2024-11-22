@@ -67,7 +67,7 @@ namespace FileMgr {
    *
    * #### Return if file exists:
    * ```typescript
-   * await copyRawFileToPath(context, 'example.txt', '/path/to/target.txt', { returnIfExists: true });
+   * await copyRawFileToPath(context, 'example.txt', '/path/to/target.txt', { checkExistence: true, returnIfExists: true });
    * ```
    * If the file exists, the function will resolve without copying the file.
    */
