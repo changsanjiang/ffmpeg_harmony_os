@@ -26,8 +26,8 @@ struct Index {
           console.info("onClick");
           // this.test1();
           // this.test2();
-          this.test3();
-          // this.test4();
+          // this.test3();
+          this.test4();
         })
     }
     .height('100%')
@@ -122,7 +122,7 @@ struct Index {
     let cacheDir = getContext(this).cacheDir;
     let mp4Path = this.mp4Path; // 输入文件的路径, 可以是本地路径也可以是远程路径;
     let outputPath = cacheDir + `/output_4.mp4`;
-    let commands = ["ffmpeg", "-i", mp4Path, "-vf", "drawtext=text='文字水印':fontfile=/system/fonts/HarmonyOS_Sans.ttf:fontcolor=white:fontsize=24:x=10:y=10", "-codec:a", "copy", outputPath, "-y", "-v", "info"];
+    let commands = ["ffmpeg", "-i", mp4Path, "-vf", "drawtext=text='文字水印':fontfile=/system/fonts/HarmonyOS_Sans_SC.ttf:fontcolor=white:fontsize=24:x=10:y=10", "-codec:a", "copy", outputPath, "-y", "-v", "info"];
     console.log(`[Commands] ${commands.join(" ")}`);
 
     FFmpeg.execute(commands, {
