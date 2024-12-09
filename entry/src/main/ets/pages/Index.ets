@@ -1,5 +1,4 @@
-import { FFAbortController, FFmpeg, FFProgressMessageParser } from '@sj/ffmpeg';
-import { fileIo } from '@kit.CoreFileKit';
+import { FFmpeg, FFProgressMessageParser } from '@sj/ffmpeg';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { FileMgr } from '@sj/filemgr';
@@ -28,6 +27,7 @@ struct Index {
           // this.test1();
           // this.test2();
           this.test3();
+          // this.test4();
         })
     }
     .height('100%')
@@ -103,6 +103,26 @@ struct Index {
     let outputPath = cacheDir + `/output_3.mp4`;
     let commands = ["ffmpeg", "-i", mp4Path, "-ignore_loop", "0", "-i", gitPath, "-filter_complex", "overlay=0:0", "-shortest", outputPath, "-y", "-v", "info"];
 
+    FFmpeg.execute(commands, {
+      logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
+      progressCallback: (message: string) => {
+        this.message = message;
+        console.log(`[progress]${JSON.stringify(FFProgressMessageParser.parse(message))}`);
+      },
+    }).then(() => {
+      this.message = "已完成:" + outputPath;
+      console.info(`Execution succeeded with outputPath: ${outputPath}`);
+    }).catch((error: Error) => {
+      console.error(`Execution failed with error: ${error.message}`);
+    });
+  }
+
+  // 绘制文字水印
+  test4() {
+    let cacheDir = getContext(this).cacheDir;
+    let mp4Path = this.mp4Path; // 输入文件的路径, 可以是本地路径也可以是远程路径;
+    let outputPath = cacheDir + `/output_4.mp4`;
+    let commands = ["ffmpeg", "-i", mp4Path, "-vf", "drawtext=text='文字水印':fontfile=/system/fonts/HarmonyOS_Sans.ttf:fontcolor=white:fontsize=24:x=10:y=10", "-codec:a", "copy", outputPath, "-y", "-v", "info"];
     console.log(`[Commands] ${commands.join(" ")}`);
 
     FFmpeg.execute(commands, {
@@ -114,6 +134,23 @@ struct Index {
     }).then(() => {
       this.message = "已完成:" + outputPath;
       console.info(`Execution succeeded with outputPath: ${outputPath}`);
+    }).catch((error: Error) => {
+      console.error(`Execution failed with error: ${error.message}`);
+    });
+  }
+
+  test5() {
+    let commands = ["ffprobe", "-v", "info", "-of", "json", "-show_entries", "stream=sample_rate,bit_rate,duration", "-i", this.mp4Path];
+    let output = "";
+    FFmpeg.execute(commands, {
+      logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
+      outputCallback: (msg: string) => {
+        output += msg;
+        console.log(`[output]${msg}`);
+      }
+    }).then(() => {
+      console.info(`Execution succeeded with output: ${output}`);
+      this.message = output;
     }).catch((error: Error) => {
       console.error(`Execution failed with error: ${error.message}`);
     });
