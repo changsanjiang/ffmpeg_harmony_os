@@ -1,3 +1,6 @@
+#### [v1.0.8] 2024/12
+- 修复`cannot find record '&@sj/ffmpeg/xxx'`;
+
 #### [v1.0.7] 2024/12
 - 开启`libfreetype`, 用于支持`drawtext`文字水印;
 
