@@ -5,13 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "/Users/db/.ohos/config/default_utilities_n8pGtPZxXdfPZS6Qnwb6Zkfiy2hoNnUZRF-3Be5GYvE=.cer",
-          "storePassword": "0000001B48EAC4D73D1415B360877DBC2C16B42E24F3C217797AD7AFC28C77FA2ABA9F5A0F2E848F2A134D",
+          "certpath": "/Users/db/.ohos/config/default_ffmpegproj_7qYWC-W0VyzElJUeOLvBWz0qv8WVUFF0WogyOuzAT5A=.cer",
+          "storePassword": "0000001B96123D51C500CB5B5FD30BE5C7EED872FBF291626F333EA64E1C332F3DA803062F1AFB7E32C38A",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001BF3EDDA841E5FF2A112BA358737E67B229F1333E07B818BAD13DC0F8C6A9905C5A4609B86B6D029",
-          "profile": "/Users/db/.ohos/config/default_utilities_n8pGtPZxXdfPZS6Qnwb6Zkfiy2hoNnUZRF-3Be5GYvE=.p7b",
+          "keyPassword": "0000001B4D5A541F9235D9F97A727FAA7C6B7222901CA40C41CCFB151E92E429FA3AF750C4FF4EEF9AEBE1",
+          "profile": "/Users/db/.ohos/config/default_ffmpegproj_7qYWC-W0VyzElJUeOLvBWz0qv8WVUFF0WogyOuzAT5A=.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "/Users/db/.ohos/config/default_utilities_n8pGtPZxXdfPZS6Qnwb6Zkfiy2hoNnUZRF-3Be5GYvE=.p12"
+          "storeFile": "/Users/db/.ohos/config/default_ffmpegproj_7qYWC-W0VyzElJUeOLvBWz0qv8WVUFF0WogyOuzAT5A=.p12"
         }
       }
     ],
@@ -19,10 +19,11 @@
       {
         "name": "default",
         "signingConfig": "default",
-        "compatibleSdkVersion": "5.0.0(12)",
+        "compatibleSdkVersion": "5.0.1(13)",
         "runtimeOS": "HarmonyOS",
         "buildOption": {
           "strictMode": {
+            "caseSensitiveCheck": true,
             "useNormalizedOHMUrl": true
           }
         }
