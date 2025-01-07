@@ -7,6 +7,7 @@
 #ifndef FFMPEGPROJ_MEDIAREADER_H
 #define FFMPEGPROJ_MEDIAREADER_H
 
+#include <mutex>
 #include <string>
 
 extern "C" {
@@ -40,13 +41,19 @@ namespace CoreMedia {
         // 跳转
         int seek(int64_t timestamp, int flags = AVSEEK_FLAG_BACKWARD);
     
+        // 中断请求
+        void interrupt();                       
+    
         // 关闭媒体文件
         void close();
     
     private:
         const std::string url;                  // 媒体文件的路径
         AVFormatContext* _Nullable fmt_ctx;     // AVFormatContext 用于管理媒体文件
-        int stream_idx;                       
+        int stream_idx;                         // 选中的流的索引
+    
+        std::atomic<bool> interrupt_requested;  // 请求中断读取
+        std::mutex interruption_mutex;          // 用于等待读取中断的互斥锁
     };
 };
 

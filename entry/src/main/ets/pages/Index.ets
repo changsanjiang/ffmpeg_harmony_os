@@ -2,6 +2,7 @@ import { FFmpeg, FFProgressMessageParser } from '@sj/ffmpeg';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { FileMgr } from '@sj/filemgr';
+import { MCLogModule, MCMediaCache } from '@sj/mediacache';
 
 @Entry
 @Component
@@ -35,14 +36,20 @@ struct Index {
     .width('100%')
   }
 
-  aboutToAppear(): void {
+  async aboutToAppear(): Promise<void> {
+
+    await MCMediaCache.prepare();
+    MCMediaCache.setLogEnabled(true);
+    MCMediaCache.setLogWhiteModules([MCLogModule.MCHttpConnectionHandler, MCLogModule.MCHttpResponse])
 
     FileMgr.copyRawFileToPath(getContext(this), 'input.mp4', this.mp4Path, { checkExistence: true, returnIfExists: true });
     FileMgr.copyRawFileToPath(getContext(this), 'loading.gif', this.gifPath, { checkExistence: true, returnIfExists: true });
   }
 
-  test() {
-    FFmpeg.test(this.mp4Path);
+  async test(): Promise<void> {
+    let url = "https://xy2.v.netease.com/2020/dhp/eqokwojw16.mp4";
+    url = await MCMediaCache.proxy(url);
+    FFmpeg.test(url);
   }
 
   test1() {
