@@ -9,3 +9,5 @@ export const execute: (
   outputCallback?: (msg: string) => void, // outputCallback for ffprobe; 注意: 这个是 ffprobe 输出消息的回调, 只有在执行 ffprobe 命令时才会回调;
 ) => number;
 export const cancel: (executionId: number) => void;
+
+export const test: (url: string) => void;
