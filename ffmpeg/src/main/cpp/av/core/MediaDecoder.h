@@ -33,6 +33,9 @@ public:
         // 获取指定流的 AVStream
         AVStream* _Nullable getStream(int stream_index);
     
+        // 获取选中的流的索引, 未选择时返回-1;
+        int getSelectedStreamIndex(); 
+
         // 选择流进行解码
         int selectStream(int stream_index);
         

@@ -10,9 +10,6 @@
 #include <string>
 namespace CoreMedia {
     void test(const std::string& url);
-    
-    void testMediaReader(const std::string& url);
-    void testMediaDecoder(const std::string& url);
 }   
 
 #endif //FFMPEGPROJ_TEST_H

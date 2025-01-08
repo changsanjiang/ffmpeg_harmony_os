@@ -42,6 +42,7 @@ namespace CoreMedia {
         int readFrame(AVPacket* _Nonnull pkt);
     
         // 跳转
+        // Timestamp in AVStream.time_base units;
         int seek(int64_t timestamp, int flags = AVSEEK_FLAG_BACKWARD);
     
         // 中断读取

@@ -26,6 +26,10 @@ namespace CoreMedia {
     AVStream* _Nullable MediaDecoder::getStream(int stream_index) {
         return reader->getStream(stream_index);
     }
+    
+    int MediaDecoder::getSelectedStreamIndex() {
+        return reader->getSelectedStreamIndex();
+    }
 
     int MediaDecoder::selectStream(int stream_index) {
         AVStream *stream = reader->getStream(stream_index);
