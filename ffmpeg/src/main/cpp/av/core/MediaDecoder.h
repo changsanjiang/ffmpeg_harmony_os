@@ -42,8 +42,8 @@ public:
         // 跳转
         int seek(int64_t timestamp, int flags = AVSEEK_FLAG_BACKWARD);
         
-        // 中断读取
-        // 执行seek操作前, 需要先中断读取操作;
+        // 中断
+        // 执行seek操作前, 需要先中断解码操作(interrupt -> seek -> decodeFrame);
         void interrupt();
     
 private:
