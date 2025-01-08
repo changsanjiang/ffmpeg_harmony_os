@@ -55,7 +55,7 @@ private:
         AVPacket* _Nullable pkt;
     
         // 关闭媒体文件
-        void destroy();
+        void release();
     };
 }
 

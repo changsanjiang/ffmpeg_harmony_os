@@ -15,7 +15,7 @@ namespace CoreMedia {
 
     MediaReader::MediaReader(const std::string& url) : url(url), fmt_ctx(nullptr), stream_idx(-1), interrupt_requested(false), interruption_mutex() {}
     
-    MediaReader::~MediaReader() { destroy(); }
+    MediaReader::~MediaReader() { release(); }
     
     int MediaReader::prepare() {
         if (fmt_ctx != nullptr) {
@@ -36,7 +36,7 @@ namespace CoreMedia {
     
         ret = avformat_find_stream_info(fmt_ctx, nullptr);
         if (ret < 0) {
-            destroy();
+            release();
             return ret;
         }
         return 0;
@@ -93,7 +93,7 @@ namespace CoreMedia {
         interrupt_requested.store(false);
     }
     
-    void MediaReader::destroy() {
+    void MediaReader::release() {
         if (fmt_ctx != nullptr) {
             avformat_close_input(&fmt_ctx);
         }

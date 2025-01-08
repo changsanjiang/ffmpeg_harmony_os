@@ -12,7 +12,7 @@ namespace CoreMedia {
     }
 
     MediaDecoder::~MediaDecoder() {
-        destroy();
+        release();
     }
 
     int MediaDecoder::prepare() {
@@ -125,7 +125,7 @@ namespace CoreMedia {
         reader->interrupt();
     }
 
-    void MediaDecoder::destroy() {
+    void MediaDecoder::release() {
         if ( reader != nullptr ) {
             delete reader;
             reader = nullptr;

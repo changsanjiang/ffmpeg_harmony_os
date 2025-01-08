@@ -58,7 +58,7 @@ namespace CoreMedia {
         std::mutex interruption_mutex;          // 用于等待读取中断的互斥锁
     
         // 关闭媒体文件
-        void destroy();
+        void release();
     };
 };
 
