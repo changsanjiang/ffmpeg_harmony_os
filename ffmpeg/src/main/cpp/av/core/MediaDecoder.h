@@ -18,6 +18,7 @@ extern "C" {
 }
 
 namespace CoreMedia {
+    /** 用于解码 */
     class MediaDecoder {
 public:
         MediaDecoder(const std::string& url);

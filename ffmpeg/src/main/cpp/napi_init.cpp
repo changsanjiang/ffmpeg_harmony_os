@@ -14,7 +14,7 @@
     You should have received a copy of the GNU General Public License
     along with @sj/ffmpeg. If not, see <http://www.gnu.org/licenses/>.
  * */
-#include "extension/client_print.h"
+#include "av/core/Test.h"
 #include "extension/execute_cmds.h"
 #include "napi/native_api.h"
 
@@ -23,7 +23,6 @@
 // 接口实现 https://gitee.com/openharmony-sig/knowledge_demo_temp/blob/master/docs/napi_study/docs/hello_napi.md#%E6%8E%A5%E5%8F%A3%E5%AE%9E%E7%8E%B0
 // 调用接口 https://gitee.com/openharmony-sig/knowledge_demo_temp/blob/master/docs/napi_study/docs/hello_napi.md#%E8%B0%83%E7%94%A8%E6%8E%A5%E5%8F%A3
 
-#include "av/core/MediaReader.h"
 
 EXTERN_C_START
 
@@ -38,30 +37,9 @@ static napi_value NAPI_Test(napi_env env, napi_callback_info info) {
     napi_get_value_string_utf8(env, args[url_index], nullptr, 0, &url_len);
     char* url = new char[url_len + 1];
     napi_get_value_string_utf8(env, args[url_index], url, url_len + 1, &url_len);
+   
+    CoreMedia::test(url);
     
-    client_print_message3("AAAA: [Test] url=%s", url);
-    
-    CoreMedia::MediaReader* reader = new CoreMedia::MediaReader(url);
-    int ret = reader->open();
-    client_print_message3("AAAA: [Test] open with status: %d", ret);
-    
-    int nb_streams = reader->getStreamCount();
-    client_print_message3("AAAA: [Test] nb_streams: %d", nb_streams);
-    
-    reader->selectStream(0);
-    client_print_message3("AAAA: [Test] select stream at index: 0");
-    
-    AVPacket *pkt = av_packet_alloc();
-    while ( (ret = reader->readFrame(pkt)) >= 0 ) {
-        client_print_message3("AAAA: [Test] readFrame with size: %d", pkt->size);
-        av_packet_unref(pkt);
-    }
-    
-    reader->close();
-    client_print_message3("AAAA: [Test] close");
-
-    av_packet_free(&pkt);
-    delete reader;
     delete[] url;
     return nullptr;
 }
