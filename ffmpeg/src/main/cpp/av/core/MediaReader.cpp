@@ -51,6 +51,10 @@ namespace CoreMedia {
         return nullptr;
     }
 
+    int MediaReader::getSelectedStreamIndex() {
+        return stream_idx;
+    }
+
     int MediaReader::selectStream(int stream_index) {
         if ( fmt_ctx == nullptr || stream_index < 0 || stream_index >= fmt_ctx->nb_streams ) {
             return AVERROR_STREAM_NOT_FOUND;
@@ -58,11 +62,6 @@ namespace CoreMedia {
         stream_idx = stream_index;
         return 0;
     }
-    
-    // read 操作是阻塞调用
-    // 如果想并发操作, 可以开两个线程:
-    // 一个线程进行 read 操作, 另一个线程进行 seek 或 close 操作;
-    // 在进行 seek 或 close 操作时, 需要判断是否正在进行读取, 需要中断读取然后再进行接下来的操作; 
     
     int MediaReader::readFrame(AVPacket* _Nonnull pkt) {
         if ( fmt_ctx == nullptr || stream_idx == -1 ) {

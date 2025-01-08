@@ -5,9 +5,10 @@
 // please include "napi/native_api.h".
 
 #include "MediaDecoder.h"
+#include <bits/errno.h>
 
 namespace CoreMedia {
-    MediaDecoder::MediaDecoder(const std::string& url): url(url), ctx(nullptr), reader(nullptr), pkt(nullptr) {
+    MediaDecoder::MediaDecoder(const std::string& url): reader(new MediaReader(url)), ctx(nullptr), pkt(nullptr) {
     
     }
 
@@ -16,30 +17,18 @@ namespace CoreMedia {
     }
 
     int MediaDecoder::open() {
-        if ( reader != nullptr ) {
-            return AVERROR(EAGAIN);
-        }
-    
-        reader = new MediaReader(url);
-        if ( reader == nullptr ) {
-            return AVERROR(ENOMEM);
-        }
         return reader->open();
     }
 
     int MediaDecoder::getStreamCount() {
-        return reader != nullptr ? reader->getStreamCount() : 0;
+        return reader->getStreamCount();
     }
 
     AVStream* _Nullable MediaDecoder::getStream(int stream_index) {
-        return reader != nullptr ? reader->getStream(stream_index) : nullptr;
+        return reader->getStream(stream_index);
     }
 
     int MediaDecoder::selectStream(int stream_index) {
-        if ( reader == nullptr ) {
-            return AVERROR_STREAM_NOT_FOUND;
-        }
-        
         AVStream *stream = reader->getStream(stream_index);
         if ( stream == nullptr ) {
             return AVERROR_STREAM_NOT_FOUND;
@@ -48,7 +37,7 @@ namespace CoreMedia {
         int error = reader->selectStream(stream_index);
         if ( error < 0 ) {
             return error;
-        }   
+        }
         
         // 获取解码器
         AVCodecParameters *codecpar = stream->codecpar;
@@ -81,11 +70,15 @@ namespace CoreMedia {
             return AVERROR(ENOMEM);
         }
         return 0;
-    }    
+    }
 
     int MediaDecoder::decodeFrame(AVFrame* _Nonnull frame) {
-        if ( reader == nullptr || ctx == nullptr ) {
+        if ( reader->getSelectedStreamIndex() == -1 ) {
             return AVERROR_STREAM_NOT_FOUND;
+        }
+
+        if ( ctx == nullptr ) {
+            return AVERROR_DECODER_NOT_FOUND;
         }
 
         if ( pkt == nullptr ) {
@@ -95,51 +88,53 @@ namespace CoreMedia {
         int error = 0;
         while(true) {
             error = avcodec_receive_frame(ctx, frame); // receive decoded frames
-            if ( error == AVERROR(EAGAIN) ) {
-                error = reader->readFrame(pkt); // read packet
-                if ( error < 0 ) {
-                    return error;
-                }
+            if ( error != AVERROR(EAGAIN) ) {
+                break;
+            }
 
-                error = avcodec_send_packet(ctx, pkt); // send packet to codec
-                if ( error < 0 ) {
-                    return error;
-                }
-                av_packet_unref(pkt);
+            error = reader->readFrame(pkt); // read packet
+            if ( error < 0 ) {
+                break;
             }
-            else {
-                return error;
+
+            error = avcodec_send_packet(ctx, pkt); // send packet to codec
+            if ( error < 0 ) {
+                break;
             }
+            av_packet_unref(pkt);
         }
-        return 0;
+        return error;
     }
 
     int MediaDecoder::seek(int64_t timestamp, int flags) {
-        if ( reader == nullptr || ctx == nullptr ) {
-            return AVERROR_STREAM_NOT_FOUND;
-        }
-        
         int error = reader->seek(timestamp, flags);
         if ( error < 0 ) {
             return error;
         }
 
-        avcodec_flush_buffers(ctx);
+        if ( ctx != nullptr ) {
+            avcodec_flush_buffers(ctx);
+        }
         return 0;
     }
 
+    void MediaDecoder::interrupt() {
+        reader->interrupt();
+    }
+
     void MediaDecoder::close() {
+        if ( reader != nullptr ) {
+            reader->close();
+            delete reader;
+            reader = nullptr;
+        }
+
         if ( pkt != nullptr ) {
             av_packet_free(&pkt);
         }
     
         if ( ctx != nullptr ) {
             avcodec_free_context(&ctx);
-        }
-    
-        if ( reader != nullptr ) {
-            delete reader;
-            reader = nullptr;
         }
     }
 }

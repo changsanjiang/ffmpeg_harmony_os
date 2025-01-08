@@ -31,7 +31,10 @@ namespace CoreMedia {
     
         // 获取指定流的 AVStream
         AVStream* _Nullable getStream(int stream_index);
-    
+        
+        // 获取选中的流的索引, 未选择时返回-1;
+        int getSelectedStreamIndex(); 
+        
         // 选择流进行读取
         int selectStream(int stream_index);
     
@@ -50,7 +53,7 @@ namespace CoreMedia {
     private:
         const std::string url;                  // 媒体文件的路径
         AVFormatContext* _Nullable fmt_ctx;     // AVFormatContext 用于管理媒体文件
-        int stream_idx;                         // 选中的流的索引
+        int stream_idx;                         // 选中的流的索引, 未选择时为-1;
     
         std::atomic<bool> interrupt_requested;  // 请求中断读取
         std::mutex interruption_mutex;          // 用于等待读取中断的互斥锁
