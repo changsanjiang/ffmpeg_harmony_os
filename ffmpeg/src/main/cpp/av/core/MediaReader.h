@@ -24,7 +24,7 @@ namespace CoreMedia {
         ~MediaReader();
     
         // 打开媒体文件
-        int open();
+        int prepare();
         
         // 获取流的数量
         int getStreamCount();
@@ -44,19 +44,20 @@ namespace CoreMedia {
         // 跳转
         int seek(int64_t timestamp, int flags = AVSEEK_FLAG_BACKWARD);
     
-        // 中断请求
-        void interrupt();                       
-    
-        // 关闭媒体文件
-        void close();
+        // 中断读取
+        // 执行seek操作前, 需要先中断读取操作(interrupt -> seek -> readFrame);
+        void interrupt();
     
     private:
         const std::string url;                  // 媒体文件的路径
         AVFormatContext* _Nullable fmt_ctx;     // AVFormatContext 用于管理媒体文件
         int stream_idx;                         // 选中的流的索引, 未选择时为-1;
     
-        std::atomic<bool> interrupt_requested;  // 请求中断读取
+        std::atomic<bool> interrupt_requested;  // 请求读取中断
         std::mutex interruption_mutex;          // 用于等待读取中断的互斥锁
+    
+        // 关闭媒体文件
+        void destroy();
     };
 };
 

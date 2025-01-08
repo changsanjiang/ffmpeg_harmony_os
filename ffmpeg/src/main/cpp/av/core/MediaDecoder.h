@@ -25,7 +25,7 @@ public:
         ~MediaDecoder();
     
         // 打开媒体文件
-        int open();
+        int prepare();
         
         // 获取流的数量
         int getStreamCount();
@@ -42,16 +42,17 @@ public:
         // 跳转
         int seek(int64_t timestamp, int flags = AVSEEK_FLAG_BACKWARD);
         
-        // 中断请求
+        // 中断读取
+        // 执行seek操作前, 需要先中断读取操作;
         void interrupt();
-    
-        // 关闭媒体文件
-        void close();
     
 private:
         MediaReader* reader;                    // MediaReader 用于读取未解码的数据包
         AVCodecContext* _Nullable ctx;          // AVCodecContext 用于解码
         AVPacket* _Nullable pkt;
+    
+        // 关闭媒体文件
+        void destroy();
     };
 }
 

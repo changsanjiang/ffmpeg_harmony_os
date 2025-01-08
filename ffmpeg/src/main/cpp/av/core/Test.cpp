@@ -9,6 +9,10 @@
 #include "MediaDecoder.h"
 #include "extension/client_print.h"
 
+// TODO() next ...
+// read 操作执行时如果正在执行 seek 操作, 则需要等待 seek 操作结束;
+// seek 操作执行时如果正在执行 read 操作, 则需要等待 read 操作中断;
+
 namespace CoreMedia {
     void test(const std::string& url) {
         testMediaDecoder(url);
@@ -18,7 +22,7 @@ namespace CoreMedia {
         client_print_message3("AAAA: [Test] url=%s", url.c_str());
     
         CoreMedia::MediaReader* reader = new CoreMedia::MediaReader(url);
-        int ret = reader->open();
+        int ret = reader->prepare();
         client_print_message3("AAAA: [Test] open with status: %d", ret);
         
         int nb_streams = reader->getStreamCount();
@@ -34,7 +38,6 @@ namespace CoreMedia {
         }
 
         client_print_message3("AAAA: [Test] clear");
-        reader->close();
         delete reader;
         av_packet_free(&pkt);
     }
@@ -43,7 +46,7 @@ namespace CoreMedia {
         client_print_message3("AAAA: [Test] url=%s", url.c_str());
     
         CoreMedia::MediaDecoder* decoder = new CoreMedia::MediaDecoder(url);
-        int ret = decoder->open();
+        int ret = decoder->prepare();
         client_print_message3("AAAA: [Test] open with status: %d", ret);
         
         int nb_streams = decoder->getStreamCount();
@@ -65,7 +68,6 @@ namespace CoreMedia {
         }
 
         client_print_message3("AAAA: [Test] clear");
-        decoder->close();
         delete decoder;
         av_frame_free(&frame);
     }

@@ -5,7 +5,6 @@
 // please include "napi/native_api.h".
 
 #include "MediaDecoder.h"
-#include <bits/errno.h>
 
 namespace CoreMedia {
     MediaDecoder::MediaDecoder(const std::string& url): reader(new MediaReader(url)), ctx(nullptr), pkt(nullptr) {
@@ -13,11 +12,11 @@ namespace CoreMedia {
     }
 
     MediaDecoder::~MediaDecoder() {
-        close();
+        destroy();
     }
 
-    int MediaDecoder::open() {
-        return reader->open();
+    int MediaDecoder::prepare() {
+        return reader->prepare();
     }
 
     int MediaDecoder::getStreamCount() {
@@ -122,9 +121,8 @@ namespace CoreMedia {
         reader->interrupt();
     }
 
-    void MediaDecoder::close() {
+    void MediaDecoder::destroy() {
         if ( reader != nullptr ) {
-            reader->close();
             delete reader;
             reader = nullptr;
         }
