@@ -8,6 +8,7 @@
 #include "MediaReader.h"
 #include "MediaDecoder.h"
 #include "extension/client_print.h"
+#include <bits/errno.h>
 #include <thread>
 #include <string>
 
@@ -24,14 +25,14 @@ namespace CoreMedia {
     
         CoreMedia::MediaReader* reader = new CoreMedia::MediaReader(url);
         int ret = reader->prepare();
-        client_print_message3("AAAA: [Test] prepared with status: %d", ret);
+        client_print_message3("AAAA: [Test][MediaReader] prepared with status: %d", ret);
         
         int nb_streams = reader->getStreamCount();
-        client_print_message3("AAAA: [Test] nb_streams: %d", nb_streams);
+        client_print_message3("AAAA: [Test][MediaReader] nb_streams: %d", nb_streams);
         
         AVPacket *pkt = av_packet_alloc();
         while ( (ret = reader->readPacket(pkt)) >= 0 ) {
-            client_print_message3("AAAA: [Test] readFrame with size: %d", pkt->size);
+            client_print_message3("AAAA: [Test][MediaReader] readFrame with size: %d", pkt->size);
             av_packet_unref(pkt);
         }
 
@@ -42,112 +43,190 @@ namespace CoreMedia {
 
     void testMediaDecoder(const std::string& url) {
         client_print_message3("AAAA: [Test] url=%s", url.c_str());
-    
-        CoreMedia::MediaDecoder* decoder = new CoreMedia::MediaDecoder(url);
-        int ret = decoder->prepare();
-        client_print_message3("AAAA: [Test] prepared with status: %d", ret);
-        
-        int nb_streams = decoder->getStreamCount();
-        client_print_message3("AAAA: [Test] nb_streams: %d", nb_streams);
-        
-        for (int i = 0; i < nb_streams ; ++i ) {
-            AVStream *stream = decoder->getStream(i);
-            if ( stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO ) {
-                decoder->selectStream(i);
-                client_print_message3("AAAA: [Test] select audio stream at index: i");
-                break;            
-            }
-        }
-    
-        AVFrame *frame = av_frame_alloc();
-        while ( (ret = decoder->decode(frame)) >= 0 ) {
-            client_print_message3("AAAA: [Test] decode frame success: nb_samples=%d, sample_rate=%d, nb_channels=%d, format=%d", frame->nb_samples, frame->sample_rate, frame->ch_layout.nb_channels, frame->format);
-            av_frame_unref(frame);
-        }
 
-        client_print_message3("AAAA: [Test] clear");
-        delete decoder;
-        av_frame_free(&frame);
-    }
-
-    void testMediaDecoder2(const std::string &url) {
-        client_print_message3("AAAA: [Test] url=%s", url.c_str());
+        CoreMedia::MediaReader* reader = nullptr;
+        CoreMedia::MediaDecoder* decoder = nullptr;
+        AVPacket *pkt = nullptr;
+        AVFrame *frame = nullptr;
+        int ret = 0;
     
-        CoreMedia::MediaDecoder* decoder = new CoreMedia::MediaDecoder(url);
-        int ret = decoder->prepare();
-        client_print_message3("AAAA: [Test] prepared with status: %d", ret);
-        
-        int nb_streams = decoder->getStreamCount();
-        client_print_message3("AAAA: [Test] nb_streams: %d", nb_streams);
-        
-        for (int i = 0; i < nb_streams ; ++i ) {
-            AVStream *stream = decoder->getStream(i);
-            if ( stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO ) {
-                decoder->selectStream(i);
-                client_print_message3("AAAA: [Test] select audio stream at index: i");
-                break;            
-            }
+        reader = new CoreMedia::MediaReader(url);
+        ret = reader->prepare();
+        client_print_message3("AAAA: [Test][MediaReader] prepared with status: %d", ret);
+        if ( ret < 0 ) {
+            goto end;
         }
         
-        std::mutex mutex;
-        bool interrupted = false;
+        pkt = av_packet_alloc();
+        if ( pkt == nullptr ) {
+            client_print_message3("AAAA: [Test][MediaReader] Could not allocate pkt");
+            goto end;
+        }
     
-        std::thread decode([&] { 
-            AVFrame *frame = av_frame_alloc();
-            int error = 0;
-            while ( true ) {
-                client_print_message3("AAAA: [Test] decode frame");
-                error = decoder->decode(frame);
-                if ( error < 0 ) {
-                    client_print_message3("AAAA: [Test] decode frame error: %d, EXIT=%d", error, error == AVERROR_EXIT);
+        decoder = new CoreMedia::MediaDecoder();
+        ret = decoder->prepare(reader->getBestStream(AVMEDIA_TYPE_AUDIO));
+        client_print_message3("AAAA: [Test][MediaDecoder] prepared with status: %d", ret);
+        if ( ret < 0 ) {
+            goto end;
+        }
+        
+        while (ret >= 0) {
+            ret = decoder->receive(frame);  // receive frame
+            if ( ret >= 0 ) {
+                client_print_message3("AAAA: [Test] decode frame success: nb_samples=%d, sample_rate=%d, nb_channels=%d, format=%d", frame->nb_samples, frame->sample_rate, frame->ch_layout.nb_channels, frame->format);
+                av_frame_unref(frame);
+            }
+            else if ( ret == AVERROR(EAGAIN) ) {
+                ret = reader->readPacket(pkt); // read pkt
+                if ( ret < 0 ) {
                     break;
                 }
             
-                client_print_message3("AAAA: [Test] decode frame success: nb_samples=%d, sample_rate=%d, nb_channels=%d, format=%d", frame->nb_samples, frame->sample_rate, frame->ch_layout.nb_channels, frame->format);
-                av_frame_unref(frame);
-                
-                std::unique_lock<std::mutex> lock(mutex);
-                if ( interrupted ) {
-                    client_print_message3("AAAA: [Test] interrupted");
+                ret = decoder->send(pkt); // send pkt
+                if ( ret < 0 ) {
                     break;
                 }
+                av_packet_unref(pkt);
             }
-            av_frame_free(&frame);
-        });
-    
-        std::thread interrupt([&] {
-            std::this_thread::sleep_for(std::chrono::seconds(3)); // 延迟 3 秒         
-            decoder->interrupt();
-            {
-                std::unique_lock<std::mutex> lock(mutex);   
-                interrupted = true;
-            }
+        }
         
-            std::this_thread::sleep_for(std::chrono::seconds(3)); // 延迟 3 秒         
-        
-            decoder->seek(0);
-        
-            AVFrame *frame = av_frame_alloc();
-            int error = 0;
-            int idx = 0;
-            while ( (error = decoder->decode(frame)) >= 0 ) {
-                client_print_message3("AAAA: [Test] 222 decode frame success: nb_samples=%d, sample_rate=%d, nb_channels=%d, format=%d", frame->nb_samples, frame->sample_rate, frame->ch_layout.nb_channels, frame->format);
-                av_frame_unref(frame);
-                idx += 1;
-                if ( idx > 5 ) {
-                    client_print_message3("AAAA: [Test] 222 break decode");
-                    break;
-                }
-            }
-            client_print_message3("AAAA: [Test] 222 decode frame error: %d, EXIT=%d", error, error == AVERROR_EXIT);
-            av_frame_free(&frame);
-        });
-    
-        decode.join();
-        interrupt.join();
+    end: 
+        client_print_message3("AAAA: [Test] end");
+        if ( pkt != nullptr ) av_packet_free(&pkt);
+        if ( frame != nullptr ) av_frame_free(&frame);
+        if ( decoder != nullptr ) delete decoder;
+        if ( reader != nullptr ) delete reader;
+    }
 
-        client_print_message3("AAAA: [Test] clear");
-        delete decoder;
+
+    void testMediaDecoder2(const std::string& url) {
+        client_print_message3("AAAA: [Test] url=%s", url.c_str());
+
+        CoreMedia::MediaReader* reader = nullptr;
+        CoreMedia::MediaDecoder* decoder = nullptr;
+        AVPacket *pkt = nullptr;
+        AVFrame *frame = nullptr;
+        int ret = 0;
+        int stream_idx = -1;
+    
+        reader = new CoreMedia::MediaReader(url);
+        ret = reader->prepare();
+        client_print_message3("AAAA: [Test][MediaReader] prepared with status: %d", ret);
+        if ( ret < 0 ) {
+            goto end;
+        }
+        
+        pkt = av_packet_alloc();
+        if ( pkt == nullptr ) {
+            client_print_message3("AAAA: [Test][MediaReader] Could not allocate pkt");
+            goto end;
+        }
+    
+        stream_idx = reader->findBestStream(AVMEDIA_TYPE_AUDIO);
+        if ( stream_idx == AVERROR_STREAM_NOT_FOUND ) {
+            client_print_message3("AAAA: [Test][MediaReader] Could not find audio stream");
+            goto end;
+        }
+    
+        decoder = new CoreMedia::MediaDecoder();
+        ret = decoder->prepare(reader->getStream(stream_idx));
+        client_print_message3("AAAA: [Test][MediaDecoder] prepared with status: %d", ret);
+        if ( ret < 0 ) {
+            goto end;
+        }
+    
+        {
+            std::mutex mutex;
+            bool interrupted = false;
+
+            std::thread decode1([&] {
+                while (ret >= 0) {
+                    ret = decoder->receive(frame);  // receive frame
+                    if ( ret >= 0 ) {
+                        client_print_message3("AAAA: [Test][MediaDecoder] decode frame success: nb_samples=%d, sample_rate=%d, nb_channels=%d, format=%d", frame->nb_samples, frame->sample_rate, frame->ch_layout.nb_channels, frame->format);
+                        av_frame_unref(frame);
+                    }
+                    else if ( ret == AVERROR(EAGAIN) ) {
+                        ret = reader->readPacket(pkt); // read pkt
+                        if ( ret < 0 ) {
+                            break;
+                        }
+                    
+                        ret = decoder->send(pkt); // send pkt
+                        if ( ret < 0 ) {
+                            break;
+                        }
+                        av_packet_unref(pkt);
+                    }
+                    
+                    std::unique_lock<std::mutex> lock(mutex);
+                    if ( interrupted ) {
+                        client_print_message3("AAAA: [Test][MediaDecoder] interrupted");
+                        break;
+                    }
+                }
+            });
+        
+            std::thread interrupt([&] {
+                std::this_thread::sleep_for(std::chrono::seconds(3)); // 延迟 3 秒         
+                reader->interrupt();
+                {
+                    std::unique_lock<std::mutex> lock(mutex);   
+                    interrupted = true;
+                }
+            
+                std::this_thread::sleep_for(std::chrono::seconds(3)); // 延迟 3 秒         
+            
+                reader->seek(0, 0);
+            
+                int error = 0;
+                int idx = 0;
+                while (ret >= 0) {
+                    ret = decoder->receive(frame);  // receive frame
+                    
+                    if ( ret >= 0 ) {
+                        idx += 1;
+                        client_print_message3("AAAA: [Test][MediaDecoder] 222 decode frame success: nb_samples=%d, sample_rate=%d, nb_channels=%d, format=%d", frame->nb_samples, frame->sample_rate, frame->ch_layout.nb_channels, frame->format);
+                        if ( idx > 5 ) {
+                            client_print_message3("AAAA: [Test][MediaDecoder] 222 break decode");
+                            break;
+                        }
+                        av_frame_unref(frame);
+                    }
+                    else if ( ret == AVERROR(EAGAIN) ) {
+                        ret = reader->readPacket(pkt); // read pkt
+                        if ( ret < 0 ) {
+                            break;
+                        }
+                    
+                        ret = decoder->send(pkt); // send pkt
+                        if ( ret < 0 ) {
+                            break;
+                        }
+                        av_packet_unref(pkt);
+                    }
+                    
+                    std::unique_lock<std::mutex> lock(mutex);
+                    if ( interrupted ) {
+                        client_print_message3("AAAA: [Test][MediaDecoder] interrupted");
+                        break;
+                    }
+                }
+            
+                client_print_message3("AAAA: [Test] 222 decode frame error: %d, EXIT=%d", error, error == AVERROR_EXIT);
+                av_frame_free(&frame);
+            });
+        
+            decode1.join();
+            interrupt.join();
+        }
+        
+    end: 
+        client_print_message3("AAAA: [Test] end");
+        if ( pkt != nullptr ) av_packet_free(&pkt);
+        if ( frame != nullptr ) av_frame_free(&frame);
+        if ( decoder != nullptr ) delete decoder;
+        if ( reader != nullptr ) delete reader;
     }
 
     void testFilterGraph(const std::string &url) {
@@ -184,7 +263,7 @@ namespace CoreMedia {
         const int out_sample_rates[] = { 44100, -1 };
         const AVFilterLink *outlink;
 
-        ret = avfilter_graph_create_filter(&buffersrc_ctx, abuffersrc, "in", decoder->buildSrcArgs().c_str(), NULL, filter_graph);
+        ret = avfilter_graph_create_filter(&buffersrc_ctx, abuffersrc, "in", decoder->makeSrcArgs().c_str(), NULL, filter_graph);
         if (ret < 0) {
             client_print_message3("AAAA: [Test] Cannot create buffer source");
             return;

@@ -7,7 +7,6 @@
 #ifndef FFMPEGPROJ_MEDIADECODER_H
 #define FFMPEGPROJ_MEDIADECODER_H
 
-#include "av/core/MediaReader.h"
 #include <string>
 
 extern "C" {
@@ -21,54 +20,24 @@ namespace CoreMedia {
     /** 用于解码 */
     class MediaDecoder {
 public:
-        MediaDecoder(const std::string& url);
+        MediaDecoder();
         ~MediaDecoder();
     
-        // 打开媒体文件
-        int prepare();
+        int prepare(AVStream* _Nonnull stream);
+    
+        int send(AVPacket* _Nonnull pkt);
         
-        // 获取流的数量
-        int getStreamCount();
+        int receive(AVFrame* _Nonnull frame);
     
-        // 获取指定流的 AVStream
-        AVStream* _Nullable getStream(int stream_index);
+        void flush();
     
-        /* av_find_best_stream
-         *
-         * @return  the non-negative stream number in case of success,
-         *          AVERROR_STREAM_NOT_FOUND if no stream with the requested type
-         *          could be found,
-         *          AVERROR_DECODER_NOT_FOUND if streams were found but no decoder
-        */
-        int findBestStream(AVMediaType type);
-    
-        // 获取选中的流的索引, 未选择时返回-1;
-        int getSelectedStreamIndex(); 
-    
-        // 选择流进行解码
-        int selectStream(int stream_index);
-    
-        // 选择流进行解码
-        int selectBestStream(AVMediaType type);
-        
         // 生成 buffersrc filter 的构建参数;
-        std::string buildSrcArgs();
-        
-        // 解码下一帧
-        int decode(AVFrame* _Nonnull frame);
-        
-        // 跳转
-        int seek(int64_t timestamp, int flags = AVSEEK_FLAG_BACKWARD);
-        
-        // 中断
-        // 执行seek操作前, 需要先中断解码操作(interrupt -> seek -> decodeFrame);
-        void interrupt();
+        std::string makeSrcArgs();
     
 private:
-        MediaReader* _Nullable reader;          // MediaReader 用于读取未解码的数据包
-        int stream_index;                       // 要解码的流的索引, 默认-1表示还未选择
         AVCodecContext* _Nullable dec_ctx;      // AVCodecContext 用于解码
-        AVPacket* _Nullable pkt;
+        AVRational time_base;
+        int stream_index;
     
         // 关闭媒体文件
         void release();

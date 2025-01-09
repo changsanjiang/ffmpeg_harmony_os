@@ -32,7 +32,8 @@ namespace CoreMedia {
         int getStreamCount();
     
         // 获取指定流的 AVStream
-        AVStream* _Nullable getStream(int stream_index);
+        AVStream* _Nullable getStream(int stream_index);    
+        AVStream* _Nullable getBestStream(AVMediaType type);
     
         /* av_find_best_stream
          *
@@ -46,8 +47,17 @@ namespace CoreMedia {
         // 读取下一帧
         int readPacket(AVPacket* _Nonnull pkt);
     
-        // 跳转
-        // Timestamp in AVStream.time_base units;
+        /* 跳转
+         *
+         * av_seek_frame
+         *
+         * @param stream_index If stream_index is (-1), a default stream is selected,
+         *                     and timestamp is automatically converted from
+         *                     AV_TIME_BASE units to the stream specific time_base.
+         * @param timestamp    Timestamp in AVStream.time_base units or, if no stream
+         *                     is specified, in AV_TIME_BASE units.
+         * @param flags        flags which select direction and seeking mode
+        */
         int seek(int64_t timestamp, int stream_index, int flags = AVSEEK_FLAG_BACKWARD);
     
         // 中断读取

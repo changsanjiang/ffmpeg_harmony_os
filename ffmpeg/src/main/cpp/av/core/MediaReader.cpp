@@ -57,6 +57,10 @@ namespace CoreMedia {
         return fmt_ctx->streams[stream_index];
     }
 
+    AVStream* _Nullable MediaReader::getBestStream(AVMediaType type) {
+        return getStream(findBestStream(type));
+     }
+
     int MediaReader::findBestStream(AVMediaType type) {
         if ( fmt_ctx == nullptr ) {
             return AVERROR_INVALIDDATA;
