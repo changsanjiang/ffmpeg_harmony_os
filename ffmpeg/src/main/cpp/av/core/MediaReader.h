@@ -11,9 +11,11 @@
 #include <string>
 
 extern "C" {
-    #include <libavformat/avformat.h>
-    #include <libavcodec/packet.h>
-    #include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavcodec/packet.h>
+#include <libavcodec/avcodec.h>
+#include <libavcodec/codec.h>
+#include <libavutil/avutil.h>
 }
 
 namespace CoreMedia {
@@ -31,6 +33,15 @@ namespace CoreMedia {
     
         // 获取指定流的 AVStream
         AVStream* _Nullable getStream(int stream_index);
+    
+        /* av_find_best_stream
+         *
+         * @return  the non-negative stream number in case of success,
+         *          AVERROR_STREAM_NOT_FOUND if no stream with the requested type
+         *          could be found,
+         *          AVERROR_DECODER_NOT_FOUND if streams were found but no decoder
+        */
+        int findBestStream(AVMediaType type);
         
         // 获取选中的流的索引, 未选择时返回-1;
         int getSelectedStreamIndex(); 

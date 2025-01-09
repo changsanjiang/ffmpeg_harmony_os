@@ -51,6 +51,13 @@ namespace CoreMedia {
         return nullptr;
     }
 
+    int MediaReader::findBestStream(AVMediaType type) {
+        if ( fmt_ctx != nullptr ) {
+            return av_find_best_stream(fmt_ctx, type, -1, -1, nullptr, 0);
+        }
+        return AVERROR_STREAM_NOT_FOUND;
+    }
+
     int MediaReader::getSelectedStreamIndex() {
         return stream_idx;
     }

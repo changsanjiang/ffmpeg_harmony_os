@@ -33,14 +33,29 @@ public:
         // 获取指定流的 AVStream
         AVStream* _Nullable getStream(int stream_index);
     
+        /* av_find_best_stream
+         *
+         * @return  the non-negative stream number in case of success,
+         *          AVERROR_STREAM_NOT_FOUND if no stream with the requested type
+         *          could be found,
+         *          AVERROR_DECODER_NOT_FOUND if streams were found but no decoder
+        */
+        int findBestStream(AVMediaType type);
+    
         // 获取选中的流的索引, 未选择时返回-1;
         int getSelectedStreamIndex(); 
-
+    
         // 选择流进行解码
         int selectStream(int stream_index);
+    
+        // 选择流进行解码
+        int selectBestStream(AVMediaType type);
+        
+        // 生成 buffersrc filter 的构建参数;
+        std::string buildSrcArgs();
         
         // 解码下一帧
-        int decodeFrame(AVFrame* _Nonnull frame);
+        int decode(AVFrame* _Nonnull frame);
         
         // 跳转
         int seek(int64_t timestamp, int flags = AVSEEK_FLAG_BACKWARD);
@@ -50,8 +65,8 @@ public:
         void interrupt();
     
 private:
-        MediaReader* reader;                    // MediaReader 用于读取未解码的数据包
-        AVCodecContext* _Nullable ctx;          // AVCodecContext 用于解码
+        MediaReader* _Nullable reader;                    // MediaReader 用于读取未解码的数据包
+        AVCodecContext* _Nullable dec_ctx;      // AVCodecContext 用于解码
         AVPacket* _Nullable pkt;
     
         // 关闭媒体文件
