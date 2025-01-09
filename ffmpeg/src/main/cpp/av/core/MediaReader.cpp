@@ -13,7 +13,7 @@ namespace CoreMedia {
         return shouldInterrupt ? 1 : 0; // 1 中断, 0 继续;
     }
 
-    MediaReader::MediaReader(const std::string& url) : url(url), fmt_ctx(nullptr), stream_idx(-1), interrupt_requested(false), interruption_mutex() {}
+    MediaReader::MediaReader(const std::string& url) : url(url), fmt_ctx(nullptr), interrupt_requested(false), interruption_mutex() {}
     
     MediaReader::~MediaReader() { release(); }
     
@@ -34,64 +34,56 @@ namespace CoreMedia {
             return ret;
         }
     
-        ret = avformat_find_stream_info(fmt_ctx, nullptr);
-        if (ret < 0) {
-            release();
-            return ret;
-        }
-        return 0;
+        return avformat_find_stream_info(fmt_ctx, nullptr);
     }
     
-    int MediaReader::getStreamCount() { return fmt_ctx != nullptr ? fmt_ctx->nb_streams : 0; }
+    int MediaReader::getStreamCount() { 
+        if ( fmt_ctx == nullptr ) {
+            return 0;
+        }
+    
+        return fmt_ctx->nb_streams; 
+    }
     
     AVStream *_Nullable MediaReader::getStream(int stream_index) {
-        if (fmt_ctx != nullptr && stream_index >= 0 && stream_index < fmt_ctx->nb_streams) {
-            return fmt_ctx->streams[stream_index];
+        if ( fmt_ctx == nullptr ) {
+            return nullptr;
         }
-        return nullptr;
+
+        if ( stream_index < 0 || stream_index >= fmt_ctx->nb_streams ) {
+            return nullptr;
+        }
+        
+        return fmt_ctx->streams[stream_index];
     }
 
     int MediaReader::findBestStream(AVMediaType type) {
-        if ( fmt_ctx != nullptr ) {
-            return av_find_best_stream(fmt_ctx, type, -1, -1, nullptr, 0);
-        }
-        return AVERROR_STREAM_NOT_FOUND;
-    }
-
-    int MediaReader::getSelectedStreamIndex() {
-        return stream_idx;
-    }
-
-    int MediaReader::selectStream(int stream_index) {
-        if ( fmt_ctx == nullptr || stream_index < 0 || stream_index >= fmt_ctx->nb_streams ) {
-            return AVERROR_STREAM_NOT_FOUND;
-        }
-        stream_idx = stream_index;
-        return 0;
-    }
-    
-    int MediaReader::readFrame(AVPacket* _Nonnull pkt) {
-        if ( fmt_ctx == nullptr || stream_idx == -1 ) {
-            return AVERROR_STREAM_NOT_FOUND;
+        if ( fmt_ctx == nullptr ) {
+            return AVERROR_INVALIDDATA;
         }
     
-        int ret = 0;
+        return av_find_best_stream(fmt_ctx, type, -1, -1, nullptr, 0);
+    }
+    
+    int MediaReader::readPacket(AVPacket* _Nonnull pkt) {
+        if ( fmt_ctx == nullptr ) {
+            return AVERROR_INVALIDDATA;
+        }
+    
         std::lock_guard<std::mutex> lock(interruption_mutex);        // 读取前锁定
-        while ((ret = av_read_frame(fmt_ctx, pkt)) >= 0) {
-            if (pkt->stream_index == stream_idx) {
-                return 0; // 找到匹配的流
-            }
-            av_packet_unref(pkt); // 释放不需要的包
-        }
-        return ret;
+        return av_read_frame(fmt_ctx, pkt);
     }
     
-    int MediaReader::seek(int64_t timestamp, int flags) {
-        if ( fmt_ctx == nullptr || stream_idx == -1 ) {
+    int MediaReader::seek(int64_t timestamp, int stream_index, int flags) {
+        if ( fmt_ctx == nullptr ) {
+            return AVERROR_INVALIDDATA;
+        }
+
+        if ( stream_index < 0 || stream_index >= fmt_ctx->nb_streams ) {
             return AVERROR_STREAM_NOT_FOUND;
         }
 
-        return av_seek_frame(fmt_ctx, stream_idx, timestamp, flags);
+        return av_seek_frame(fmt_ctx, stream_index, timestamp, flags);
     }
 
     void MediaReader::interrupt() {
@@ -101,7 +93,7 @@ namespace CoreMedia {
     }
     
     void MediaReader::release() {
-        if (fmt_ctx != nullptr) {
+        if ( fmt_ctx != nullptr ) {
             avformat_close_input(&fmt_ctx);
         }
     }

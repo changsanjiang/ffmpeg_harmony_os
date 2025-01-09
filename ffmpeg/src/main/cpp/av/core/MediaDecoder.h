@@ -65,7 +65,8 @@ public:
         void interrupt();
     
 private:
-        MediaReader* _Nullable reader;                    // MediaReader 用于读取未解码的数据包
+        MediaReader* _Nullable reader;          // MediaReader 用于读取未解码的数据包
+        int stream_index;                       // 要解码的流的索引, 默认-1表示还未选择
         AVCodecContext* _Nullable dec_ctx;      // AVCodecContext 用于解码
         AVPacket* _Nullable pkt;
     

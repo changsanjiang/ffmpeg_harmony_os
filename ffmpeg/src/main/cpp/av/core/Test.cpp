@@ -29,11 +29,8 @@ namespace CoreMedia {
         int nb_streams = reader->getStreamCount();
         client_print_message3("AAAA: [Test] nb_streams: %d", nb_streams);
         
-        reader->selectStream(0);
-        client_print_message3("AAAA: [Test] select stream at index: 0");
-        
         AVPacket *pkt = av_packet_alloc();
-        while ( (ret = reader->readFrame(pkt)) >= 0 ) {
+        while ( (ret = reader->readPacket(pkt)) >= 0 ) {
             client_print_message3("AAAA: [Test] readFrame with size: %d", pkt->size);
             av_packet_unref(pkt);
         }

@@ -8,7 +8,7 @@
 #include <sstream>
 
 namespace CoreMedia {
-    MediaDecoder::MediaDecoder(const std::string& url): reader(new MediaReader(url)), dec_ctx(nullptr), pkt(nullptr) {
+    MediaDecoder::MediaDecoder(const std::string& url): reader(new MediaReader(url)), stream_index(-1), dec_ctx(nullptr), pkt(nullptr) {
     
     }
 
@@ -33,7 +33,7 @@ namespace CoreMedia {
     }
     
     int MediaDecoder::getSelectedStreamIndex() {
-        return reader->getSelectedStreamIndex();
+        return stream_index;
     }
 
     int MediaDecoder::selectStream(int stream_index) {
@@ -42,11 +42,6 @@ namespace CoreMedia {
             return AVERROR_STREAM_NOT_FOUND;
         }
     
-        int error = reader->selectStream(stream_index);
-        if ( error < 0 ) {
-            return error;
-        }
-        
         // 获取解码器
         AVCodecParameters *codecpar = stream->codecpar;
         const AVCodec* codec = avcodec_find_decoder(codecpar->codec_id);
@@ -62,7 +57,7 @@ namespace CoreMedia {
     
         // 初始化解码器上下文
         // Copy decoder parameters to decoder context
-        error = avcodec_parameters_to_context(dec_ctx, codecpar);
+        int error = avcodec_parameters_to_context(dec_ctx, codecpar);
         if ( error < 0 ) {
             return error;
         }    
@@ -77,6 +72,8 @@ namespace CoreMedia {
         if ( pkt == nullptr ) {
             return AVERROR(ENOMEM);
         }
+    
+        this->stream_index = stream_index;
         return 0;
     }
 
@@ -124,17 +121,9 @@ namespace CoreMedia {
     }
 
     int MediaDecoder::decode(AVFrame* _Nonnull frame) {
-        if ( reader->getSelectedStreamIndex() == -1 ) {
+        if ( stream_index == -1 ) {
             return AVERROR_STREAM_NOT_FOUND;
         }
-
-        if ( dec_ctx == nullptr ) {
-            return AVERROR_DECODER_NOT_FOUND;
-        }
-
-        if ( pkt == nullptr ) {
-            return AVERROR(ENOMEM);
-        }        
 
         int error = 0;
         while(true) {
@@ -143,7 +132,13 @@ namespace CoreMedia {
                 break;
             }
 
-            error = reader->readFrame(pkt); // read packet
+            while( (error = reader->readPacket(pkt)) >= 0 ) { // read stream packet 
+                if ( pkt->stream_index == stream_index ) { // selected stream
+                    break;
+                }
+                av_packet_unref(pkt);
+            }
+            
             if ( error < 0 ) {
                 break;
             }
