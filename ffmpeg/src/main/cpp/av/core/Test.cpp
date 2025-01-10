@@ -49,6 +49,7 @@ namespace CoreMedia {
         AVPacket *pkt = nullptr;
         AVFrame *frame = nullptr;
         int ret = 0;
+        int stream_idx = -1;
     
         reader = new CoreMedia::MediaReader(url);
         ret = reader->prepare();
@@ -56,20 +57,22 @@ namespace CoreMedia {
         if ( ret < 0 ) {
             goto end;
         }
-        
-        pkt = av_packet_alloc();
-        if ( pkt == nullptr ) {
-            client_print_message3("AAAA: [Test][MediaReader] Could not allocate pkt");
+    
+        stream_idx = reader->findBestStream(AVMEDIA_TYPE_AUDIO);
+        if ( stream_idx == AVERROR_STREAM_NOT_FOUND ) {
+            client_print_message3("AAAA: [Test][MediaReader] Could not find audio stream");
             goto end;
         }
-    
+        
         decoder = new CoreMedia::MediaDecoder();
-        ret = decoder->prepare(reader->getBestStream(AVMEDIA_TYPE_AUDIO));
+        ret = decoder->prepare(reader->getStream(stream_idx));
         client_print_message3("AAAA: [Test][MediaDecoder] prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
         }
         
+        pkt = av_packet_alloc();
+        frame = av_frame_alloc();
         while (ret >= 0) {
             ret = decoder->receive(frame);  // receive frame
             if ( ret >= 0 ) {
@@ -82,9 +85,11 @@ namespace CoreMedia {
                     break;
                 }
             
-                ret = decoder->send(pkt); // send pkt
-                if ( ret < 0 ) {
-                    break;
+                if ( pkt->stream_index == stream_idx ) {
+                    ret = decoder->send(pkt); // send pkt
+                    if ( ret < 0 ) {
+                        break;
+                    }
                 }
                 av_packet_unref(pkt);
             }
@@ -98,7 +103,6 @@ namespace CoreMedia {
         if ( reader != nullptr ) delete reader;
     }
 
-
     void testMediaDecoder2(const std::string& url) {
         client_print_message3("AAAA: [Test] url=%s", url.c_str());
 
@@ -111,16 +115,10 @@ namespace CoreMedia {
     
         reader = new CoreMedia::MediaReader(url);
         ret = reader->prepare();
-        client_print_message3("AAAA: [Test][MediaReader] prepared with status: %d", ret);
+        client_print_message3("AAAA: [Test][MediaReader] prepared with status: %s", av_err2str(ret));
         if ( ret < 0 ) {
             goto end;
-        }
-        
-        pkt = av_packet_alloc();
-        if ( pkt == nullptr ) {
-            client_print_message3("AAAA: [Test][MediaReader] Could not allocate pkt");
-            goto end;
-        }
+        } 
     
         stream_idx = reader->findBestStream(AVMEDIA_TYPE_AUDIO);
         if ( stream_idx == AVERROR_STREAM_NOT_FOUND ) {
@@ -130,7 +128,7 @@ namespace CoreMedia {
     
         decoder = new CoreMedia::MediaDecoder();
         ret = decoder->prepare(reader->getStream(stream_idx));
-        client_print_message3("AAAA: [Test][MediaDecoder] prepared with status: %d", ret);
+        client_print_message3("AAAA: [Test][MediaDecoder] prepared with status: %s", av_err2str(ret));
         if ( ret < 0 ) {
             goto end;
         }
@@ -139,48 +137,65 @@ namespace CoreMedia {
             std::mutex mutex;
             bool interrupted = false;
 
+            pkt = av_packet_alloc();
+            frame = av_frame_alloc();
+        
             std::thread decode1([&] {
                 while (ret >= 0) {
                     ret = decoder->receive(frame);  // receive frame
+                    client_print_message3("AAAA: [Test][MediaDecoder] receive status: %s", av_err2str(ret));
+                
                     if ( ret >= 0 ) {
                         client_print_message3("AAAA: [Test][MediaDecoder] decode frame success: nb_samples=%d, sample_rate=%d, nb_channels=%d, format=%d", frame->nb_samples, frame->sample_rate, frame->ch_layout.nb_channels, frame->format);
                         av_frame_unref(frame);
                     }
                     else if ( ret == AVERROR(EAGAIN) ) {
                         ret = reader->readPacket(pkt); // read pkt
+                        client_print_message3("AAAA: [Test][MediaReader] readPacket status: %s", av_err2str(ret));
+                        
+                        {
+                            std::unique_lock<std::mutex> lock(mutex);
+                            if ( interrupted ) {
+                                client_print_message3("AAAA: [Test][MediaDecoder] interrupted, EXIT=%d", ret == AVERROR_EXIT);
+                                break;
+                            }
+                        }
+                    
                         if ( ret < 0 ) {
                             break;
                         }
                     
-                        ret = decoder->send(pkt); // send pkt
-                        if ( ret < 0 ) {
-                            break;
+                        if ( pkt->stream_index == stream_idx ) {
+                            ret = decoder->send(pkt); // send pkt
+                            client_print_message3("AAAA: [Test][MediaDecoder] send status: %s", av_err2str(ret));
+                        
+                            if ( ret < 0 ) {
+                                break;
+                            }
                         }
                         av_packet_unref(pkt);
-                    }
-                    
-                    std::unique_lock<std::mutex> lock(mutex);
-                    if ( interrupted ) {
-                        client_print_message3("AAAA: [Test][MediaDecoder] interrupted");
-                        break;
                     }
                 }
             });
         
             std::thread interrupt([&] {
                 std::this_thread::sleep_for(std::chrono::seconds(3)); // 延迟 3 秒         
+                client_print_message3("AAAA: [Test][MediaReader] 222 interrupt before");
                 reader->interrupt();
+            
                 {
                     std::unique_lock<std::mutex> lock(mutex);   
                     interrupted = true;
+                    client_print_message3("AAAA: [Test][MediaReader] 222 interrupt after");
                 }
             
-                std::this_thread::sleep_for(std::chrono::seconds(3)); // 延迟 3 秒         
-            
-                reader->seek(0, 0);
+                std::this_thread::sleep_for(std::chrono::seconds(3)); // 继续延迟 3 秒         
+                reader->seek(0, stream_idx);
+                decoder->flush();
             
                 int error = 0;
                 int idx = 0;
+                ret = 0;
                 while (ret >= 0) {
                     ret = decoder->receive(frame);  // receive frame
                     
@@ -199,21 +214,18 @@ namespace CoreMedia {
                             break;
                         }
                     
-                        ret = decoder->send(pkt); // send pkt
-                        if ( ret < 0 ) {
-                            break;
+                        if ( pkt->stream_index == stream_idx ) {
+                            ret = decoder->send(pkt); // send pkt
+                            if ( ret < 0 ) {
+                                break;
+                            }
                         }
-                        av_packet_unref(pkt);
-                    }
                     
-                    std::unique_lock<std::mutex> lock(mutex);
-                    if ( interrupted ) {
-                        client_print_message3("AAAA: [Test][MediaDecoder] interrupted");
-                        break;
+                        av_packet_unref(pkt);
                     }
                 }
             
-                client_print_message3("AAAA: [Test] 222 decode frame error: %d, EXIT=%d", error, error == AVERROR_EXIT);
+                client_print_message3("AAAA: [Test][MediaDecoder] 222 decode frame error: %d, EXIT=%d", error, error == AVERROR_EXIT);
                 av_frame_free(&frame);
             });
         
@@ -230,69 +242,89 @@ namespace CoreMedia {
     }
 
     void testFilterGraph(const std::string &url) {
-        CoreMedia::MediaDecoder* decoder = new CoreMedia::MediaDecoder(url);
-        int ret = decoder->prepare();
-        if ( ret < 0 ) {
-            client_print_message3("AAAA: [Test] Decoder preparation failed with status: %d", ret);
-            return;
-        }
-
-        ret = decoder->selectBestStream(AVMEDIA_TYPE_AUDIO);
-        if ( ret < 0 ) {
-            client_print_message3("AAAA: [Test] Stream selection failed with status: %d", ret);
-            return;
-        }
-        
-        AVFilterGraph *filter_graph = avfilter_graph_alloc();
-        if ( filter_graph == nullptr ) {
-            client_print_message3("AAAA: [Test] Could not allocate 'filter_graph'.");
-            return;
-        }
+        client_print_message3("AAAA: [Test] url=%s", url.c_str());
     
+        CoreMedia::MediaReader* reader = nullptr;
+        CoreMedia::MediaDecoder* decoder = nullptr;
+        AVPacket *pkt = nullptr;
+        AVFrame *frame = nullptr;
+        int stream_idx = -1;
+    
+        AVFilterGraph *filter_graph = nullptr;
         const AVFilter *abuffersrc  = avfilter_get_by_name("abuffer");
         const AVFilter *abuffersink = avfilter_get_by_name("abuffersink");
         /* buffer audio source: the decoded frames from the decoder will be inserted here. */
         AVFilterContext *buffersink_ctx = nullptr;
         /* buffer audio sink: to terminate the filter chain. */
         AVFilterContext *buffersrc_ctx = nullptr;
-        AVFilterInOut *outputs = avfilter_inout_alloc();
-        AVFilterInOut *inputs  = avfilter_inout_alloc();
+        AVFilterInOut *outputs = nullptr;
+        AVFilterInOut *inputs  = nullptr;
+        AVFrame *filt_frame = nullptr;
     
         const char *filter_descr = "aresample=44100,aformat=sample_fmts=s16:channel_layouts=mono";
         const enum AVSampleFormat out_sample_fmts[] = { AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_NONE };
         const int out_sample_rates[] = { 44100, -1 };
         const AVFilterLink *outlink;
 
+        int ret = 0;
+    
+        reader = new CoreMedia::MediaReader(url);
+        ret = reader->prepare();
+        client_print_message3("AAAA: [Test][MediaReader] prepared with status: %d", ret);
+        if ( ret < 0 ) {
+            goto end;
+        }
+        
+        stream_idx = reader->findBestStream(AVMEDIA_TYPE_AUDIO);
+        if ( stream_idx < 0 ) {
+            client_print_message3("AAAA: [Test][MediaReader] Could not find audio stream");
+            goto end;
+        }
+    
+        decoder = new CoreMedia::MediaDecoder();
+        ret = decoder->prepare(reader->getBestStream(AVMEDIA_TYPE_AUDIO));
+        client_print_message3("AAAA: [Test][MediaDecoder] prepared with status: %d", ret);
+        if ( ret < 0 ) {
+            goto end;
+        }
+    
+        filter_graph = avfilter_graph_alloc();
+        if ( filter_graph == nullptr ) {
+            client_print_message3("AAAA: [Test][FilterGraph] Could not allocate 'filter_graph'.");
+            goto end;
+        }
+    
         ret = avfilter_graph_create_filter(&buffersrc_ctx, abuffersrc, "in", decoder->makeSrcArgs().c_str(), NULL, filter_graph);
         if (ret < 0) {
-            client_print_message3("AAAA: [Test] Cannot create buffer source");
-            return;
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot create buffer source");
+            goto end;
         }
     
         ret = avfilter_graph_create_filter(&buffersink_ctx, abuffersink, "out", NULL, NULL, filter_graph);
         if (ret < 0) {
-            client_print_message3("AAAA: [Test] Cannot create audio buffer sink");
-            return;
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot create audio buffer sink");
+            goto end;
         }
     
         ret = av_opt_set_int_list(buffersink_ctx, "sample_fmts", out_sample_fmts, -1, AV_OPT_SEARCH_CHILDREN);
         if (ret < 0) {
-            client_print_message3("AAAA: [Test] Cannot set output sample format");
-            return;
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot set output sample format");
+            goto end;
         }
     
         ret = av_opt_set(buffersink_ctx, "ch_layouts", "mono", AV_OPT_SEARCH_CHILDREN);
         if (ret < 0) {
-            client_print_message3("AAAA: [Test] Cannot set output channel layout");
-            return;
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot set output channel layout");
+            goto end;
         }
     
         ret = av_opt_set_int_list(buffersink_ctx, "sample_rates", out_sample_rates, -1, AV_OPT_SEARCH_CHILDREN);
         if (ret < 0) {
-            client_print_message3("AAAA: [Test] Cannot set output sample rate");
-            return;
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot set output sample rate");
+            goto end;
         }
     
+        outputs = avfilter_inout_alloc();
         /*
          * Set the endpoints for the filter graph. The filter_graph will
          * be linked to the graph described by filters_descr.
@@ -309,6 +341,7 @@ namespace CoreMedia {
         outputs->pad_idx    = 0;
         outputs->next       = NULL;
     
+        inputs = avfilter_inout_alloc();
         /*
          * The buffer sink input must be connected to the output pad of
          * the last filter described by filters_descr; since the last
@@ -322,18 +355,18 @@ namespace CoreMedia {
     
         ret = avfilter_graph_parse_ptr(filter_graph, filter_descr, &inputs, &outputs, NULL);
         if ( ret < 0 ) {
-            client_print_message3("AAAA: [Test] filter graph parse failed with status: %d", ret);
-            return;
+            client_print_message3("AAAA: [Test][FilterGraph] filter graph parse failed with status: %d", ret);
+            goto end;
         }
 
         if ( (ret = avfilter_graph_config(filter_graph, NULL)) < 0 ) {
-            client_print_message3("AAAA: [Test] filter graph config failed with status: %d", ret);
-            return;
+            client_print_message3("AAAA: [Test][FilterGraph] filter graph config failed with status: %d", ret);
+            goto end;
         }
     
         // 检查输入和输出
         if (inputs) {
-            std::string output = "AAAA: [Test] Input labels: ";
+            std::string output = "AAAA: [Test][FilterGraph] Input labels: ";
             AVFilterInOut* cur = inputs;
             while (cur) {
                 output += "["; 
@@ -347,7 +380,7 @@ namespace CoreMedia {
         }
     
         if (outputs) {
-            std::string output = "AAAA: [Test] Output labels: ";
+            std::string output = "AAAA: [Test][FilterGraph] Output labels: ";
             AVFilterInOut* cur = outputs;
             while (cur) {
                 output += "["; 
@@ -365,45 +398,71 @@ namespace CoreMedia {
         outlink = buffersink_ctx->inputs[0];
         char args[512];
         av_channel_layout_describe(&outlink->ch_layout, args, sizeof(args));
-        client_print_message3("Output: srate:%dHz fmt:%s chlayout:%s\n", (int)outlink->sample_rate, (char *)av_x_if_null(av_get_sample_fmt_name(static_cast<AVSampleFormat>(outlink->format)), "?"), args);
+        client_print_message3("AAAA: [Test][FilterGraph] Output: srate:%dHz fmt:%s chlayout:%s\n", (int)outlink->sample_rate, (char *)av_x_if_null(av_get_sample_fmt_name(static_cast<AVSampleFormat>(outlink->format)), "?"), args);
     
         avfilter_inout_free(&inputs);
         avfilter_inout_free(&outputs);
-    
-    
-        // decode 
-    
-        AVFrame *frame = av_frame_alloc();
-        AVFrame *filt_frame = av_frame_alloc();
-        while ( (ret = decoder->decode(frame)) >= 0 ) {
-            client_print_message3("AAAA: [Test] decode frame success: nb_samples=%d, sample_rate=%d, nb_channels=%d, format=%d", frame->nb_samples, frame->sample_rate, frame->ch_layout.nb_channels, frame->format);
+        
+        pkt = av_packet_alloc();
+        frame = av_frame_alloc();
+        filt_frame = av_frame_alloc();
+        while (1) {
+            ret = decoder->receive(frame);  // receive frame
+            if ( ret >= 0 ) {
+                client_print_message3("AAAA: [Test][FilterGraph] decode frame success: nb_samples=%d, sample_rate=%d, nb_channels=%d, format=%d", frame->nb_samples, frame->sample_rate, frame->ch_layout.nb_channels, frame->format);
+                
+                // filter
+                /* push the audio data from decoded frame into the filtergraph */
+                if (av_buffersrc_add_frame_flags(buffersrc_ctx, frame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0) {
+                    client_print_message3("AAAA: [Test][FilterGraph] Error while feeding the audio filtergraph\n");
+                    break;
+                }
+                /* pull filtered audio from the filtergraph */
+                while (1) {
+                    ret = av_buffersink_get_frame(buffersink_ctx, filt_frame);
+                    if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                        break;
+                    if (ret < 0)
+                        goto end;
+                    client_print_message3("AAAA: [Test][FilterGraph] filter frame success: nb_samples=%d, sample_rate=%d, nb_channels=%d, format=%d", filt_frame->nb_samples, filt_frame->sample_rate, filt_frame->ch_layout.nb_channels, filt_frame->format);
+                    av_frame_unref(filt_frame);
+                }
             
-            // filter
-            /* push the audio data from decoded frame into the filtergraph */
-            if (av_buffersrc_add_frame_flags(buffersrc_ctx, frame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0) {
-                client_print_message3("Error while feeding the audio filtergraph\n");
+                av_frame_unref(frame);
+            }
+            else if ( ret == AVERROR(EAGAIN) ) {
+                ret = reader->readPacket(pkt); // read pkt
+                if ( ret < 0 ) {
+                    break;
+                }
+                
+                if ( pkt->stream_index == stream_idx ) {
+                    ret = decoder->send(pkt); // send pkt
+                    if ( ret < 0 ) {
+                        break;
+                    }
+                }
+                av_packet_unref(pkt);
+            }
+            else {
                 break;
             }
-            /* pull filtered audio from the filtergraph */
-            while (1) {
-                ret = av_buffersink_get_frame(buffersink_ctx, filt_frame);
-                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-                    break;
-                if (ret < 0)
-                    return; // goto end;
-                client_print_message3("AAAA: [Test] filter frame success: nb_samples=%d, sample_rate=%d, nb_channels=%d, format=%d", filt_frame->nb_samples, filt_frame->sample_rate, filt_frame->ch_layout.nb_channels, filt_frame->format);
-                av_frame_unref(filt_frame);
-            }
-            av_frame_unref(frame);
         }
-
-        client_print_message3("AAAA: [Test] clear");
-        delete decoder;
-        av_frame_free(&frame);
+        
+    end: 
+        client_print_message3("AAAA: [Test] end");
+        if ( pkt != nullptr ) av_packet_free(&pkt);
+        if ( frame != nullptr ) av_frame_free(&frame);
+        if ( decoder != nullptr ) delete decoder;
+        if ( reader != nullptr ) delete reader;
+        if ( inputs != nullptr ) avfilter_inout_free(&inputs);
+        if ( outputs != nullptr ) avfilter_inout_free(&outputs);
+        if ( filt_frame != nullptr ) av_frame_free(&filt_frame);
+        if ( filter_graph != nullptr ) avfilter_graph_free(&filter_graph);
     }
 
     void test(const std::string& url) {
-        // testMediaDecoder2(url);
-        testFilterGraph(url);
+        testMediaDecoder2(url);
+//         testFilterGraph(url);
     }
 }
