@@ -85,7 +85,7 @@ namespace CoreMedia {
                 src_ss  << "video_size=" << dec_ctx->width << "x" << dec_ctx->height
                         << ":pix_fmt=" << dec_ctx->pix_fmt
                         << ":time_base=" << time_base.num << "/" << time_base.den
-                        << ":pixel_aspect" << dec_ctx->sample_aspect_ratio.num << "/" << dec_ctx->sample_aspect_ratio.den;
+                        << ":pixel_aspect=" << dec_ctx->sample_aspect_ratio.num << "/" << dec_ctx->sample_aspect_ratio.den;
                 return src_ss.str();
             }
             case AVMEDIA_TYPE_AUDIO: {

@@ -9,6 +9,7 @@
 #include "MediaDecoder.h"
 #include "extension/client_print.h"
 #include <bits/errno.h>
+#include <cstddef>
 #include <thread>
 #include <string>
 
@@ -17,6 +18,7 @@ extern "C" {
 #include "libavfilter/avfilter.h"
 #include "libavfilter/buffersink.h"
 #include "libavfilter/buffersrc.h"
+#include "libavutil/pixdesc.h"
 }
 
 namespace CoreMedia {
@@ -115,7 +117,7 @@ namespace CoreMedia {
     
         reader = new CoreMedia::MediaReader(url);
         ret = reader->prepare();
-        client_print_message3("AAAA: [Test][MediaReader] prepared with status: %s", av_err2str(ret));
+        client_print_message3("AAAA: [Test][MediaReader] prepared with status: %d %s", ret, av_err2str(ret));
         if ( ret < 0 ) {
             goto end;
         } 
@@ -128,7 +130,7 @@ namespace CoreMedia {
     
         decoder = new CoreMedia::MediaDecoder();
         ret = decoder->prepare(reader->getStream(stream_idx));
-        client_print_message3("AAAA: [Test][MediaDecoder] prepared with status: %s", av_err2str(ret));
+        client_print_message3("AAAA: [Test][MediaDecoder] prepared with status: %d %s", ret, av_err2str(ret));
         if ( ret < 0 ) {
             goto end;
         }
@@ -143,7 +145,7 @@ namespace CoreMedia {
             std::thread decode1([&] {
                 while (ret >= 0) {
                     ret = decoder->receive(frame);  // receive frame
-                    client_print_message3("AAAA: [Test][MediaDecoder] receive status: %s", av_err2str(ret));
+                    client_print_message3("AAAA: [Test][MediaDecoder] receive status: %d %s", ret, av_err2str(ret));
                 
                     if ( ret >= 0 ) {
                         client_print_message3("AAAA: [Test][MediaDecoder] decode frame success: nb_samples=%d, sample_rate=%d, nb_channels=%d, format=%d", frame->nb_samples, frame->sample_rate, frame->ch_layout.nb_channels, frame->format);
@@ -151,7 +153,7 @@ namespace CoreMedia {
                     }
                     else if ( ret == AVERROR(EAGAIN) ) {
                         ret = reader->readPacket(pkt); // read pkt
-                        client_print_message3("AAAA: [Test][MediaReader] readPacket status: %s", av_err2str(ret));
+                        client_print_message3("AAAA: [Test][MediaReader] readPacket status: %d %s", ret, av_err2str(ret));
                         
                         {
                             std::unique_lock<std::mutex> lock(mutex);
@@ -167,7 +169,7 @@ namespace CoreMedia {
                     
                         if ( pkt->stream_index == stream_idx ) {
                             ret = decoder->send(pkt); // send pkt
-                            client_print_message3("AAAA: [Test][MediaDecoder] send status: %s", av_err2str(ret));
+                            client_print_message3("AAAA: [Test][MediaDecoder] send status: %d %s", ret, av_err2str(ret));
                         
                             if ( ret < 0 ) {
                                 break;
@@ -241,7 +243,7 @@ namespace CoreMedia {
         if ( reader != nullptr ) delete reader;
     }
 
-    void testFilterGraph(const std::string &url) {
+    void testFilterGraph(const std::string& url) {
         client_print_message3("AAAA: [Test] url=%s", url.c_str());
     
         CoreMedia::MediaReader* reader = nullptr;
@@ -353,19 +355,16 @@ namespace CoreMedia {
         inputs->pad_idx    = 0;
         inputs->next       = NULL;    
     
+        client_print_message3("AAAA: [Test][FilterGraph] filter graph parse before: inputs=%p, outputs=%p", inputs, outputs);
         ret = avfilter_graph_parse_ptr(filter_graph, filter_descr, &inputs, &outputs, NULL);
+        client_print_message3("AAAA: [Test][FilterGraph] filter graph parsed with status: %d, inputs=%p, outputs=%p", ret, inputs, outputs);
+    
         if ( ret < 0 ) {
-            client_print_message3("AAAA: [Test][FilterGraph] filter graph parse failed with status: %d", ret);
             goto end;
         }
 
-        if ( (ret = avfilter_graph_config(filter_graph, NULL)) < 0 ) {
-            client_print_message3("AAAA: [Test][FilterGraph] filter graph config failed with status: %d", ret);
-            goto end;
-        }
-    
         // 检查输入和输出
-        if (inputs) {
+        if (inputs != nullptr) {
             std::string output = "AAAA: [Test][FilterGraph] Input labels: ";
             AVFilterInOut* cur = inputs;
             while (cur) {
@@ -379,7 +378,7 @@ namespace CoreMedia {
             client_print_message(output.c_str());
         }
     
-        if (outputs) {
+        if (outputs != nullptr) {
             std::string output = "AAAA: [Test][FilterGraph] Output labels: ";
             AVFilterInOut* cur = outputs;
             while (cur) {
@@ -400,8 +399,14 @@ namespace CoreMedia {
         av_channel_layout_describe(&outlink->ch_layout, args, sizeof(args));
         client_print_message3("AAAA: [Test][FilterGraph] Output: srate:%dHz fmt:%s chlayout:%s\n", (int)outlink->sample_rate, (char *)av_x_if_null(av_get_sample_fmt_name(static_cast<AVSampleFormat>(outlink->format)), "?"), args);
     
-        avfilter_inout_free(&inputs);
-        avfilter_inout_free(&outputs);
+    
+        if ( (ret = avfilter_graph_config(filter_graph, NULL)) < 0 ) {
+            client_print_message3("AAAA: [Test][FilterGraph] filter graph config failed with status: %d", ret);
+            goto end;
+        }
+    
+        if ( inputs != nullptr ) avfilter_inout_free(&inputs);
+        if ( outputs != nullptr ) avfilter_inout_free(&outputs);
         
         pkt = av_packet_alloc();
         frame = av_frame_alloc();
@@ -461,8 +466,323 @@ namespace CoreMedia {
         if ( filter_graph != nullptr ) avfilter_graph_free(&filter_graph);
     }
 
+    void testFilterGraph2(const std::string& url) {
+                client_print_message3("AAAA: [Test] url=%s", url.c_str());
+    
+        CoreMedia::MediaReader* reader = nullptr;
+        CoreMedia::MediaDecoder* audioDecoder = nullptr;
+        CoreMedia::MediaDecoder* videoDecoder = nullptr;
+        int audio_stream_idx = -1;
+        int video_stream_idx = -1;
+        AVPacket *pkt = nullptr;
+        AVFrame *frame = nullptr;
+    
+        AVFilterGraph *filter_graph = nullptr;
+        
+        const AVFilter *vbuffersrc = avfilter_get_by_name("buffer");
+        const AVFilter *vbuffersink = avfilter_get_by_name("buffersink");
+        const AVFilter *abuffersrc  = avfilter_get_by_name("abuffer");
+        const AVFilter *abuffersink = avfilter_get_by_name("abuffersink");
+        
+        AVFilterContext *vbuffersink_ctx = nullptr;
+        AVFilterContext *vbuffersrc_ctx = nullptr;
+        AVFilterContext *abuffersink_ctx = nullptr;
+        AVFilterContext *abuffersrc_ctx = nullptr;
+    
+        AVFilterInOut *outputs = nullptr;
+        AVFilterInOut *inputs  = nullptr;
+        AVFrame *filt_frame = nullptr;
+    
+        const AVFilterLink *outlink;
+    
+        const char *filter_descr =  
+                                    "[0:a]aresample=44100,aformat=sample_fmts=s16:channel_layouts=mono[outa];"
+                                    "[0:v]scale=320:-1[outv]"
+    ;
+    
+        const enum AVSampleFormat out_sample_fmts[] = { AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_NONE };
+        const int out_sample_rates[] = { 44100, -1 };
+        enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_GRAY8, AV_PIX_FMT_NONE };
+
+        int ret = 0;
+    
+        reader = new CoreMedia::MediaReader(url);
+        ret = reader->prepare();
+        client_print_message3("AAAA: [Test][MediaReader] prepared with status: %d", ret);
+        if ( ret < 0 ) {
+            goto end;
+        }
+        
+        audio_stream_idx = reader->findBestStream(AVMEDIA_TYPE_AUDIO);
+        if ( audio_stream_idx < 0 ) {
+            client_print_message3("AAAA: [Test][MediaReader] Could not find audio stream");
+            goto end;
+        }
+    
+        video_stream_idx = reader->findBestStream(AVMEDIA_TYPE_VIDEO);
+        if ( video_stream_idx < 0 ) {
+            client_print_message3("AAAA: [Test][MediaReader] Could not find video stream");
+            goto end;
+        }
+    
+        audioDecoder = new CoreMedia::MediaDecoder();
+        ret = audioDecoder->prepare(reader->getStream(audio_stream_idx));
+        client_print_message3("AAAA: [Test][MediaDecoder] audioDecoder prepared with status: %d", ret);
+        if ( ret < 0 ) {
+            goto end;
+        }
+    
+        videoDecoder = new CoreMedia::MediaDecoder();
+        ret = videoDecoder->prepare(reader->getStream(video_stream_idx));
+        client_print_message3("AAAA: [Test][MediaDecoder] videoDecoder prepared with status: %d", ret);
+        if ( ret < 0 ) {
+            goto end;
+        }
+    
+        filter_graph = avfilter_graph_alloc();
+        if ( filter_graph == nullptr ) {
+            client_print_message3("AAAA: [Test][FilterGraph] Could not allocate 'filter_graph'.");
+            goto end;
+        }
+    
+        client_print_message3("AAAA: [Test] audio src args=%s", audioDecoder->makeSrcArgs().c_str());
+        ret = avfilter_graph_create_filter(&abuffersrc_ctx, abuffersrc, "0:a", audioDecoder->makeSrcArgs().c_str(), NULL, filter_graph);
+        if (ret < 0) {
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot create abuffer source");
+            goto end;
+        }
+    
+        ret = avfilter_graph_create_filter(&abuffersink_ctx, abuffersink, "outa", NULL, NULL, filter_graph);
+        if (ret < 0) {
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot create audio buffer sink");
+            goto end;
+        }
+    
+        ret = av_opt_set_int_list(abuffersink_ctx, "sample_fmts", out_sample_fmts, -1, AV_OPT_SEARCH_CHILDREN);
+        if (ret < 0) {
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot set output sample format");
+            goto end;
+        }
+    
+        ret = av_opt_set(abuffersink_ctx, "ch_layouts", "mono", AV_OPT_SEARCH_CHILDREN);
+        if (ret < 0) {
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot set output channel layout");
+            goto end;
+        }
+    
+        ret = av_opt_set_int_list(abuffersink_ctx, "sample_rates", out_sample_rates, -1, AV_OPT_SEARCH_CHILDREN);
+        if (ret < 0) {
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot set output sample rate");
+            goto end;
+        }
+    
+        client_print_message3("AAAA: [Test] video src args=%s", videoDecoder->makeSrcArgs().c_str());
+        ret = avfilter_graph_create_filter(&vbuffersrc_ctx, vbuffersrc, "0:v", videoDecoder->makeSrcArgs().c_str(), NULL, filter_graph);
+        if (ret < 0) {
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot create vbuffer source");
+            goto end;
+        }
+    
+        ret = avfilter_graph_create_filter(&vbuffersink_ctx, vbuffersink, "outv", NULL, NULL, filter_graph);
+        if (ret < 0) {
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot create video buffer sink");
+            goto end;
+        }
+    
+        ret = av_opt_set_int_list(vbuffersink_ctx, "pix_fmts", pix_fmts, AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
+        if (ret < 0) {
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot set output pixel format");
+            goto end;
+        }
+    
+        outputs = avfilter_inout_alloc();
+        /*
+         * Set the endpoints for the filter graph. The filter_graph will
+         * be linked to the graph described by filters_descr.
+         */
+    
+        /*
+         * The buffer source output must be connected to the input pad of
+         * the first filter described by filters_descr; since the first
+         * filter input label is not specified, it is set to "in" by
+         * default.
+         */
+        outputs->name       = av_strdup("0:a");
+        outputs->filter_ctx = abuffersrc_ctx;
+        outputs->pad_idx    = 0;
+        outputs->next       = avfilter_inout_alloc();
+        outputs->next->name         = av_strdup("0:v");
+        outputs->next->filter_ctx   = vbuffersrc_ctx;
+        outputs->next->pad_idx      = 0;
+        outputs->next->next         = NULL;
+    
+        inputs = avfilter_inout_alloc();
+        /*
+         * The buffer sink input must be connected to the output pad of
+         * the last filter described by filters_descr; since the last
+         * filter output label is not specified, it is set to "out" by
+         * default.
+         */
+        inputs->name       = av_strdup("outa");
+        inputs->filter_ctx = abuffersink_ctx;
+        inputs->pad_idx    = 0;
+        inputs->next       = avfilter_inout_alloc();    
+        inputs->next->name          = av_strdup("outv");
+        inputs->next->filter_ctx    = vbuffersink_ctx;
+        inputs->next->pad_idx       = 0;
+        inputs->next->next          = NULL;
+    
+        ret = avfilter_graph_parse_ptr(filter_graph, filter_descr, &inputs, &outputs, NULL);
+        if ( ret < 0 ) {
+            client_print_message3("AAAA: [Test][FilterGraph] filter graph parse failed with status: %d", ret);
+            goto end;
+        }
+
+        if ( (ret = avfilter_graph_config(filter_graph, NULL)) < 0 ) {
+            client_print_message3("AAAA: [Test][FilterGraph] filter graph config failed with status: %d", ret);
+            goto end;
+        }
+    
+        // 检查输入和输出
+        if (inputs) {
+            std::string output = "AAAA: [Test][FilterGraph] Input labels: ";
+            AVFilterInOut* cur = inputs;
+            while (cur) {
+                output += "["; 
+                output += cur->name; 
+                output += ":";
+                output += cur->filter_ctx->filter->name;
+                output += "] ";
+                cur = cur->next;
+            }
+            client_print_message(output.c_str());
+        }
+    
+        if (outputs) {
+            std::string output = "AAAA: [Test][FilterGraph] Output labels: ";
+            AVFilterInOut* cur = outputs;
+            while (cur) {
+                output += "["; 
+                output += cur->name; 
+                output += ":";
+                output += cur->filter_ctx->filter->name;
+                output += "] ";
+                cur = cur->next;
+            }
+            client_print_message(output.c_str());
+        }
+    
+        /* Print summary of the sink buffer
+         * Note: args buffer is reused to store channel layout string */
+        outlink = abuffersink_ctx->inputs[0];
+        char args[512];
+        av_channel_layout_describe(&outlink->ch_layout, args, sizeof(args));
+        client_print_message3("AAAA: [Test][FilterGraph] Audio output: srate:%dHz fmt:%s chlayout:%s\n", (int)outlink->sample_rate, (char *)av_x_if_null(av_get_sample_fmt_name(static_cast<AVSampleFormat>(outlink->format)), "?"), args);
+        outlink = vbuffersink_ctx->inputs[0]; 
+        client_print_message3("AAAA: [Test][FilterGraph] Video output: w:%d h:%d sar:%d/%d fmt:%d\n", outlink->w, outlink->h, outlink->sample_aspect_ratio.num/outlink->sample_aspect_ratio.den, outlink->format);
+    
+        if ( inputs != nullptr ) avfilter_inout_free(&inputs);
+        if ( outputs != nullptr ) avfilter_inout_free(&outputs);
+        
+        pkt = av_packet_alloc();
+        frame = av_frame_alloc();
+        filt_frame = av_frame_alloc();
+        while (1) {
+            ret = audioDecoder->receive(frame);  // receive audio frame
+            client_print_message3("AAAA: [Test][MediaDecoder] receive audio frame status: %d %s", ret, av_err2str(ret));
+            if ( ret >= 0 ) {
+                client_print_message3("AAAA: [Test][FilterGraph] receive audio frame success: nb_samples=%d, sample_rate=%d, nb_channels=%d, format=%d", frame->nb_samples, frame->sample_rate, frame->ch_layout.nb_channels, frame->format);
+
+                // filter
+                /* push the audio data from decoded frame into the filtergraph */
+                if (av_buffersrc_add_frame_flags(abuffersrc_ctx, frame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0) {
+                    client_print_message3("AAAA: [Test][FilterGraph] Error while feeding the audio filtergraph\n");
+                    break;
+                }
+                /* pull filtered audio from the filtergraph */
+                while (1) {
+                    ret = av_buffersink_get_frame(abuffersink_ctx, filt_frame);
+                    client_print_message3("AAAA: [Test][FilterGraph] audio buffersink get frame status: %d %s", ret, av_err2str(ret));
+                    if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                        break;
+                    if (ret < 0)
+                        goto end;
+                    client_print_message3("AAAA: [Test][FilterGraph] filter audio frame success: nb_samples=%d, sample_rate=%d, nb_channels=%d, format=%d", filt_frame->nb_samples, filt_frame->sample_rate, filt_frame->ch_layout.nb_channels, filt_frame->format);
+                    av_frame_unref(filt_frame);
+                }
+
+                av_frame_unref(frame);
+            }
+            
+            ret = videoDecoder->receive(frame);  // receive video frame
+            client_print_message3("AAAA: [Test][MediaDecoder] receive video frame status: %d %s", ret, av_err2str(ret));
+            if ( ret >= 0 ) {
+                client_print_message3("AAAA: [Test][FilterGraph] receive video frame success: w=%d, h=%d, format=%d", frame->width, frame->height, frame->format);
+
+                // filter
+                /* push the video data from decoded frame into the filtergraph */
+                if (av_buffersrc_add_frame_flags(vbuffersrc_ctx, frame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0) {
+                    client_print_message3("AAAA: [Test][FilterGraph] Error while feeding the video filtergraph\n");
+                    break;
+                }
+                /* pull filtered video from the filtergraph */
+                while (1) {
+                    ret = av_buffersink_get_frame(vbuffersink_ctx, filt_frame);
+                    client_print_message3("AAAA: [Test][FilterGraph] video buffersink get frame status: %d %s", ret, av_err2str(ret));
+                    if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                        break;
+                    if (ret < 0)
+                        goto end;
+                    client_print_message3("AAAA: [Test][FilterGraph] filter video frame success: w=%d, h=%d, format=%d", filt_frame->width, filt_frame->height, filt_frame->format);
+                    av_frame_unref(filt_frame);
+                }
+
+                av_frame_unref(frame);
+            }
+            
+            if ( ret == AVERROR(EAGAIN) ) {
+                ret = reader->readPacket(pkt); // read pkt
+                client_print_message3("AAAA: [Test][MediaReader] read pkt status: %d %s", ret, av_err2str(ret));
+                if ( ret < 0 ) {
+                    break;
+                }
+
+                if ( pkt->stream_index == audio_stream_idx ) {
+                    ret = audioDecoder->send(pkt); // send pkt
+                    client_print_message3("AAAA: [Test][MediaDecoder] send audio pkt status: %d %s", ret, av_err2str(ret));
+                    if ( ret < 0 ) {
+                        break;
+                    }
+                }
+                else if ( pkt->stream_index == video_stream_idx ) {
+                    ret = videoDecoder->send(pkt); // send pkt
+                    client_print_message3("AAAA: [Test][MediaDecoder] send video pkt status: %d %s", ret, av_err2str(ret));
+                    if ( ret < 0 ) {
+                        break;
+                    }
+                }
+                av_packet_unref(pkt);
+            }
+            else {
+                break;
+            }
+        }
+        
+    end: 
+        client_print_message3("AAAA: [Test] end");
+        if ( pkt != nullptr ) av_packet_free(&pkt);
+        if ( frame != nullptr ) av_frame_free(&frame);
+        if ( audioDecoder != nullptr ) delete audioDecoder;
+        if ( reader != nullptr ) delete reader;
+        if ( inputs != nullptr ) avfilter_inout_free(&inputs);
+        if ( outputs != nullptr ) avfilter_inout_free(&outputs);
+        if ( filt_frame != nullptr ) av_frame_free(&filt_frame);
+        if ( filter_graph != nullptr ) avfilter_graph_free(&filter_graph);
+    }
+
     void test(const std::string& url) {
-        testMediaDecoder2(url);
+//         testMediaDecoder2(url);
 //         testFilterGraph(url);
+        testFilterGraph2(url);
     }
 }
