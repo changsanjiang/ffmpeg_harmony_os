@@ -7,6 +7,7 @@
 #include "Test.h"
 #include "MediaReader.h"
 #include "MediaDecoder.h"
+#include "av/core/FilterGraph.h"
 #include "extension/client_print.h"
 #include <bits/errno.h>
 #include <cstddef>
@@ -547,9 +548,9 @@ namespace CoreMedia {
                                     "[0:v]scale=320:-1[outv]"
     ;
     
-        const enum AVSampleFormat out_sample_fmts[] = { AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_NONE };
+        const AVSampleFormat out_sample_fmts[] = { AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_NONE };
         const int out_sample_rates[] = { 44100, -1 };
-        enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_GRAY8, AV_PIX_FMT_NONE };
+        const AVPixelFormat out_pix_fmts[] = { AV_PIX_FMT_GRAY8, AV_PIX_FMT_NONE };
 
         int ret = 0;
     
@@ -638,7 +639,7 @@ namespace CoreMedia {
             goto end;
         }
     
-        ret = av_opt_set_int_list(vbuffersink_ctx, "pix_fmts", pix_fmts, AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
+        ret = av_opt_set_int_list(vbuffersink_ctx, "pix_fmts", out_pix_fmts, AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
         if (ret < 0) {
             client_print_message3("AAAA: [Test][FilterGraph] Cannot set output pixel format");
             goto end;
@@ -831,10 +832,223 @@ namespace CoreMedia {
         if ( v_src_params != nullptr ) av_free(v_src_params);
     }
 
+    int getSinkFrames(const std::string& stream_type, const std::string& sink_name, CoreMedia::FilterGraph* filter_graph) {
+        AVFrame *filt_frame = av_frame_alloc();
+        int ret = 0;
+        while (ret >= 0) {
+            ret = filter_graph->getFrame(sink_name, filt_frame);
+            client_print_message3("AAAA: [Test][%s] get sink frame status: %d %s", stream_type.c_str(), ret, av_err2str(ret));   
+            if ( ret < 0 ) {
+                break;
+            }
+            av_frame_unref(filt_frame);
+        }
+        av_frame_free(&filt_frame);
+        return ret;
+    }
+
+    int filter(const std::string& stream_type, const std::string& src_name, const std::string& sink_name, CoreMedia::FilterGraph* filter_graph, AVFrame *frame) {
+        int ret = 0;
+        while (ret >= 0) {
+            ret = filter_graph->addFrame(src_name, frame);
+            client_print_message3("AAAA: [Test][%s] add src frame status: %d %s", stream_type.c_str(), ret, av_err2str(ret));
+        
+            if ( ret < 0 ) {
+                break;
+            }
+            
+            ret = getSinkFrames(stream_type, sink_name, filter_graph);
+        }
+        return ret;
+    }
+
+    int transcode(const std::string& stream_type, CoreMedia::MediaDecoder* decoder, AVPacket *pkt, const std::string& src_name, const std::string& sink_name, CoreMedia::FilterGraph* filter_graph) {
+        int ret = 0;
+        while (ret >= 0) {
+            ret = decoder->send(pkt);
+            client_print_message3("AAAA: [Test][%s] send pkt status: %d %s", stream_type.c_str(), ret, av_err2str(ret));
+            if ( ret < 0 ) {
+                break;
+            }
+            
+            AVFrame *frame = av_frame_alloc();
+            while (ret >= 0) {
+                ret = decoder->receive(frame);
+                client_print_message3("AAAA: [Test][%s] receive frame status: %d %s", stream_type.c_str(), ret, av_err2str(ret));
+                if ( ret < 0 ) {
+                    break;
+                }
+            
+                ret = filter(stream_type, src_name, sink_name, filter_graph, frame);
+                av_frame_unref(frame);
+            }
+            av_frame_free(&frame);
+        }
+        return ret;
+    }
+
+
+    void testFilterGraph3(const std::string& url) {
+        client_print_message3("AAAA: [Test] url=%s", url.c_str());
+            
+        CoreMedia::MediaReader* reader = nullptr;
+        CoreMedia::MediaDecoder* audioDecoder = nullptr;
+        CoreMedia::MediaDecoder* videoDecoder = nullptr;
+        CoreMedia::FilterGraph* filterGraph = nullptr;
+        AVBufferSrcParameters* a_src_params = nullptr;
+        AVBufferSrcParameters* v_src_params = nullptr;
+    
+        int ret = 0;
+        int audio_stream_idx = -1;
+        int video_stream_idx = -1;
+
+        const char *filter_descr =  
+                                    "[0:a]aresample=44100,aformat=sample_fmts=s16:channel_layouts=mono[outa];"
+                                    "[0:v]scale=320:-1[outv]"
+    ;
+        
+        const AVSampleFormat out_sample_fmts[] = { AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_NONE };
+        const int out_sample_rates[] = { 44100, -1 };
+        const AVPixelFormat out_pix_fmts[] = { AV_PIX_FMT_GRAY8, AV_PIX_FMT_NONE };
+    
+        AVPacket *pkt = nullptr;
+        AVFrame *frame = nullptr;
+        AVFrame *filt_frame = nullptr;
+
+        // open file 
+        reader = new CoreMedia::MediaReader(url);
+        ret = reader->prepare();
+        client_print_message3("AAAA: [Test][MediaReader] prepared with status: %d", ret);
+        if ( ret < 0 ) {
+            goto end;
+        }
+        
+        audio_stream_idx = reader->findBestStream(AVMEDIA_TYPE_AUDIO);
+        client_print_message3("AAAA: [Test][MediaReader] Found audio stream at index: %d", audio_stream_idx);
+        if ( audio_stream_idx < 0 ) {
+            goto end;
+        }
+    
+        video_stream_idx = reader->findBestStream(AVMEDIA_TYPE_VIDEO);
+        client_print_message3("AAAA: [Test][MediaReader] Found video stream at index: %d", video_stream_idx);
+        if ( video_stream_idx < 0 ) {
+            goto end;
+        }
+    
+        // create decoder
+        audioDecoder = new CoreMedia::MediaDecoder();
+        ret = audioDecoder->prepare(reader->getStream(audio_stream_idx));
+        client_print_message3("AAAA: [Test][MediaDecoder] audioDecoder prepared with status: %d", ret);
+        if ( ret < 0 ) {
+            goto end;
+        }
+    
+        videoDecoder = new CoreMedia::MediaDecoder();
+        ret = videoDecoder->prepare(reader->getStream(video_stream_idx));
+        client_print_message3("AAAA: [Test][MediaDecoder] videoDecoder prepared with status: %d", ret);
+        if ( ret < 0 ) {
+            goto end;
+        }
+    
+        // create filter graph
+        filterGraph = new CoreMedia::FilterGraph();
+        ret = filterGraph->prepare();
+        client_print_message3("AAAA: [Test][FilterGraph] filterGraph prepared with status: %d", ret);
+        if ( ret < 0 ) {
+            goto end;
+        }
+    
+        a_src_params = audioDecoder->createBufferSrcParameters();
+        client_print_message3("AAAA: [Test] audio src args=%s", makeAudioBufferSourceArgs(a_src_params).c_str());
+        ret = filterGraph->addBufferSourceFilter("0:a", AVMEDIA_TYPE_AUDIO, a_src_params);
+        if ( ret < 0 ) {
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot create abuffer source");
+            goto end;
+        }
+    
+        v_src_params = videoDecoder->createBufferSrcParameters();
+        client_print_message3("AAAA: [Test] video src args=%s", makeVideoBufferSourceArgs(v_src_params).c_str());
+        ret = filterGraph->addBufferSourceFilter("0:v", AVMEDIA_TYPE_VIDEO, v_src_params);
+        if ( ret < 0 ) {
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot create vbuffer source");
+            goto end;
+        }
+    
+        ret = filterGraph->addAudioBufferSinkFilter("outa", out_sample_rates, out_sample_fmts, "mono");
+        if ( ret < 0 ) {
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot create audio buffer sink");
+            goto end;
+        }
+    
+        ret = filterGraph->addVideoBufferSinkFilter("outv", out_pix_fmts);
+        if (ret < 0) {
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot set output pixel format");
+            goto end;
+        }
+    
+        ret = filterGraph->parse(filter_descr);
+        if ( ret < 0 ) {
+            client_print_message3("AAAA: [Test][FilterGraph] filter graph parse failed with status: %d", ret);
+            goto end;
+        }
+        
+        ret = filterGraph->configure();
+        if ( ret < 0 ) {
+            client_print_message3("AAAA: [Test][FilterGraph] filter graph config failed with status: %d", ret);
+            goto end;
+        }
+    
+        // decode & filter
+        frame = av_frame_alloc();
+        pkt = av_packet_alloc();
+        filt_frame = av_frame_alloc();
+
+        while (ret >= 0 || ret == AVERROR(EAGAIN) ) {
+            ret = reader->readPacket(pkt);
+            client_print_message3("AAAA: [Test] read pkt status: %d %s", ret, av_err2str(ret));   
+            if ( ret == AVERROR(EOF) ) {
+                filterGraph->eof("0:a");
+                filterGraph->eof("0:v");
+                getSinkFrames("Audio", "outa", filterGraph);
+                getSinkFrames("Video", "outv", filterGraph);
+                break;
+            }
+        
+        
+            if ( ret < 0 ) break;
+            
+            // audio pkt
+            if ( pkt->stream_index == audio_stream_idx ) {
+                ret = transcode("Audio", audioDecoder, pkt, "0:a", "outa", filterGraph);
+            }
+            // video pkt
+            else {
+                ret = transcode("Video", videoDecoder, pkt, "0:v", "outv", filterGraph);
+            }
+            av_packet_unref(pkt);
+        }
+        
+    
+        // TODO() next ... eof
+        
+        client_print_message3("AAAA: [Test] end");
+    
+    end:
+        if ( reader != nullptr ) delete reader;
+        if ( audioDecoder != nullptr ) delete audioDecoder;
+        if ( videoDecoder != nullptr ) delete videoDecoder;
+        if ( filterGraph != nullptr ) delete filterGraph;
+        if ( a_src_params != nullptr ) av_free(a_src_params);
+        if ( v_src_params != nullptr ) av_free(v_src_params);
+        if ( frame != nullptr ) av_frame_free(&frame);
+        if ( pkt != nullptr ) av_packet_free(&pkt);
+        if ( filt_frame != nullptr ) av_frame_free(&filt_frame);
+    }
+
     void test(const std::string& url) {
 //         testMediaDecoder2(url);
 //         testFilterGraph(url);
-        testFilterGraph2(url);
+        testFilterGraph3(url);
     }
 }
 

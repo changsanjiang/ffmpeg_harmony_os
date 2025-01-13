@@ -29,13 +29,14 @@ public:
     
         int prepare();
     
-        int addAudioBufferSourceFilter(std::string& name, AVRational time_base, int sample_rate, AVSampleFormat sample_fmt, AVChannelLayout ch_layout);
-        int addVideoBufferSourceFilter(std::string& name, AVRational time_base, int width, int height, AVPixelFormat pix_fmt, AVRational sar, AVRational frame_rate);
+        int addAudioBufferSourceFilter(const std::string& name, AVRational time_base, int sample_rate, AVSampleFormat sample_fmt, const AVChannelLayout ch_layout);
+        int addVideoBufferSourceFilter(const std::string& name, const AVRational time_base, int width, int height, AVPixelFormat pix_fmt, const AVRational sar, const AVRational frame_rate);
+        int addBufferSourceFilter(const std::string& name, AVMediaType type, const AVBufferSrcParameters* params);
     
-        int addAudioBufferSinkFilter(std::string& name, int* _Nullable sample_rates, AVSampleFormat* _Nullable sample_fmts, std::string& channel_layout);
-        int addVideoBufferSinkFilter(std::string& name, AVPixelFormat* _Nullable pix_fmts);
+        int addAudioBufferSinkFilter(const std::string& name, const int* _Nullable sample_rates, const AVSampleFormat* _Nullable sample_fmts, const std::string& channel_layout);
+        int addVideoBufferSinkFilter(const std::string& name, const AVPixelFormat* _Nullable pix_fmts);
     
-        int parse(std::string& filter_descr);
+        int parse(const std::string& filter_descr);
         int configure();
         
         /**
@@ -55,7 +56,7 @@ public:
          * @return            >= 0 in case of success, a negative AVERROR code
          *                    in case of failure
          */
-        int addFrame(std::string& src_name, AVFrame* _Nullable frame, int flags = AV_BUFFERSRC_FLAG_KEEP_REF);
+        int addFrame(const std::string& src_name, AVFrame* _Nullable frame, int flags = AV_BUFFERSRC_FLAG_KEEP_REF);
     
         /**
          * av_buffersink_get_frame
@@ -73,34 +74,25 @@ public:
          *         - AVERROR_EOF if there will be no more output frames on this sink.
          *         - A different negative AVERROR code in other failure cases.
          */
-        int getFrame(std::string& sink_name, AVFrame* _Nonnull frame);
+        int getFrame(const std::string& sink_name, AVFrame* _Nonnull frame);
 
-        /** 
-         * av_buffersrc_close
-         * 
-         * Close the buffer source after EOF.
-         *
-         * This is similar to passing NULL to av_buffersrc_add_frame_flags()
-         * except it takes the timestamp of the EOF, i.e. the timestamp of the end
-         * of the last frame.
-         */
-        int eof(std::string& src_name, int64_t pts, int flags);
+        int eof(const std::string& src_name);
     
 private:
-        AVFilterGraph* _Nullable filter_graph;
-        AVFilterInOut* _Nullable outputs;
-        AVFilterInOut* _Nullable inputs;
-        AVFilterInOut* _Nullable lastOutput;
-        AVFilterInOut* _Nullable lastInput;
+        AVFilterGraph* _Nullable filter_graph = nullptr;
+        AVFilterInOut* _Nullable outputs = nullptr;
+        AVFilterInOut* _Nullable inputs = nullptr;
+        AVFilterInOut* _Nullable lastOutput = nullptr;
+        AVFilterInOut* _Nullable lastInput = nullptr;
         std::unordered_map<std::string, AVFilterContext*> instances;
         
-        const AVFilter* _Nullable abuffer;
-        const AVFilter* _Nullable vbuffer;
+        const AVFilter* _Nullable abuffer = nullptr;
+        const AVFilter* _Nullable vbuffer = nullptr;
 
-        const AVFilter* _Nullable abuffersink;
-        const AVFilter* _Nullable vbuffersink;
-        int addBufferSourceFilter(std::string& name, AVFilterContext* buffer_ctx);
-        int addBufferSinkFilter(std::string& name, AVFilterContext* buffersink_ctx);
+        const AVFilter* _Nullable abuffersink = nullptr;
+        const AVFilter* _Nullable vbuffersink = nullptr;
+        int addBufferSourceFilter(const std::string& name, AVFilterContext* buffer_ctx);
+        int addBufferSinkFilter(const std::string& name, AVFilterContext* buffersink_ctx);
         void release();
     };
 }
