@@ -14,6 +14,7 @@
     You should have received a copy of the GNU General Public License
     along with @sj/ffmpeg. If not, see <http://www.gnu.org/licenses/>.
  * */
+#include "av/core/Test.h"
 #include "extension/execute_cmds.h"
 #include "napi/native_api.h"
 
@@ -24,6 +25,24 @@
 
 
 EXTERN_C_START
+
+static napi_value NAPI_Test(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    int url_index = 0;
+    
+    napi_value args[argc];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    
+    size_t url_len;
+    napi_get_value_string_utf8(env, args[url_index], nullptr, 0, &url_len);
+    char* url = new char[url_len + 1];
+    napi_get_value_string_utf8(env, args[url_index], url, url_len + 1, &url_len);
+   
+    CoreMedia::test(url);
+    
+    delete[] url;
+    return nullptr;
+}
 
 extern napi_value 
 NAPI_SetClientPrintHandler(napi_env env, napi_callback_info info);
@@ -51,6 +70,7 @@ static napi_value Init(napi_env env, napi_value exports)
         { "prepare", nullptr, NAPI_ExePrepare, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "execute", nullptr, NAPI_ExeCommands, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "cancel", nullptr, NAPI_ExeCancel, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "test", nullptr, NAPI_Test, nullptr, nullptr, nullptr, napi_default, nullptr },
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;

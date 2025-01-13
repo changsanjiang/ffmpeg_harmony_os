@@ -12,10 +12,10 @@ include_directories(${NATIVERENDER_ROOT_PATH}
                     ${NATIVERENDER_ROOT_PATH}/include)
 
 # 自动查找 src 目录下所有 .cpp 文件
-file(GLOB SOURCES "fftools/*.c" "napi_init.cpp" "extension/*.c" "extension/*.cpp")
+file(GLOB SOURCES "fftools/*.c" "napi_init.cpp" "extension/*.c" "extension/*.cpp" "av/**/*.cpp")
 
 # 自动查找 include 目录下所有 .h 文件
-file(GLOB HEADERS "fftools/*.h" "extension/*.h")
+file(GLOB HEADERS "fftools/*.h" "extension/*.h" "av/**/*.h")
 
 add_library(ffmpeg SHARED ${SOURCES} ${HEADERS})
 target_link_libraries(ffmpeg PUBLIC libace_napi.z.so)

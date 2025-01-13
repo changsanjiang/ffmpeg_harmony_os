@@ -30,7 +30,8 @@ struct Index {
           // this.test3();
           // this.test4();
           // this.test5();
-          this.test6();
+          // this.test6();
+          this.test();
         })
     }
     .height('100%')
@@ -45,6 +46,10 @@ struct Index {
 
     FileMgr.copyRawFileToPath(getContext(this), 'input.mp4', this.mp4Path, { checkExistence: true, returnIfExists: true });
     FileMgr.copyRawFileToPath(getContext(this), 'loading.gif', this.gifPath, { checkExistence: true, returnIfExists: true });
+  }
+
+  async test(): Promise<void> {
+    FFmpeg.test(this.mp4Path);
   }
 
   test1() {
