@@ -26,7 +26,7 @@ public:
     
         int prepare(AVStream* _Nonnull stream);
     
-        int send(AVPacket* _Nonnull pkt);
+        int send(AVPacket* _Nullable pkt);
         
         int receive(AVFrame* _Nonnull frame);
     

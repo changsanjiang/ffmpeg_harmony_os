@@ -48,12 +48,12 @@ namespace CoreMedia {
         return 0;
     }
 
-    int MediaDecoder::send(AVPacket* _Nonnull pkt) {
+    int MediaDecoder::send(AVPacket* _Nullable pkt) {
         if ( dec_ctx == nullptr ) {
             return AVERROR_INVALIDDATA;
         }
     
-        if ( stream_index != pkt->stream_index ) {
+        if ( pkt != nullptr && stream_index != pkt->stream_index ) {
             return AVERROR_INVALIDDATA;
         }
         

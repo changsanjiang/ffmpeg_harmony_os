@@ -850,7 +850,8 @@ namespace CoreMedia {
     int filter(const std::string& stream_type, const std::string& src_name, const std::string& sink_name, CoreMedia::FilterGraph* filter_graph, AVFrame *frame) {
         int ret = 0;
         while (ret >= 0) {
-            ret = filter_graph->addFrame(src_name, frame);
+            int flags = frame != nullptr ? AV_BUFFERSRC_FLAG_KEEP_REF : AV_BUFFERSRC_FLAG_PUSH;
+            ret = filter_graph->addFrame(src_name, frame, flags);
             client_print_message3("AAAA: [Test][%s] add src frame status: %d %s", stream_type.c_str(), ret, av_err2str(ret));
         
             if ( ret < 0 ) {
@@ -872,15 +873,18 @@ namespace CoreMedia {
             }
             
             AVFrame *frame = av_frame_alloc();
-            while (ret >= 0) {
+            while (true) {
                 ret = decoder->receive(frame);
                 client_print_message3("AAAA: [Test][%s] receive frame status: %d %s", stream_type.c_str(), ret, av_err2str(ret));
-                if ( ret < 0 ) {
+                if ( ret < 0 && ret != AVERROR_EOF ) {
                     break;
                 }
             
-                ret = filter(stream_type, src_name, sink_name, filter_graph, frame);
+                ret = filter(stream_type, src_name, sink_name, filter_graph, ret != AVERROR_EOF ? frame : NULL);
                 av_frame_unref(frame);
+                if ( ret < 0 && ret != AVERROR(EAGAIN) ) {
+                    break;
+                }
             }
             av_frame_free(&frame);
         }
@@ -1006,14 +1010,12 @@ namespace CoreMedia {
         while (ret >= 0 || ret == AVERROR(EAGAIN) ) {
             ret = reader->readPacket(pkt);
             client_print_message3("AAAA: [Test] read pkt status: %d %s", ret, av_err2str(ret));   
-            if ( ret == AVERROR(EOF) ) {
-                filterGraph->eof("0:a");
-                filterGraph->eof("0:v");
-                getSinkFrames("Audio", "outa", filterGraph);
-                getSinkFrames("Video", "outv", filterGraph);
+            if ( ret == AVERROR_EOF ) {
+                client_print_message3("AAAA: [Test] EOF");   
+                transcode("Audio", audioDecoder, NULL, "0:a", "outa", filterGraph); // eof
+                transcode("Video", videoDecoder, NULL, "0:v", "outv", filterGraph); // eof
                 break;
             }
-        
         
             if ( ret < 0 ) break;
             
@@ -1027,9 +1029,6 @@ namespace CoreMedia {
             }
             av_packet_unref(pkt);
         }
-        
-    
-        // TODO() next ... eof
         
         client_print_message3("AAAA: [Test] end");
     
