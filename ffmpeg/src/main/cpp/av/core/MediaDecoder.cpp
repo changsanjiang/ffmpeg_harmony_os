@@ -85,7 +85,7 @@ namespace CoreMedia {
                 params->width = dec_ctx->width;
                 params->height = dec_ctx->height;
                 params->format = dec_ctx->pix_fmt;
-                params->time_base = dec_ctx->time_base;
+                params->time_base = time_base;
                 params->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
                 params->hw_frames_ctx = dec_ctx->hw_frames_ctx;
                 if ( dec_ctx->framerate.num ) params->frame_rate = dec_ctx->framerate;
@@ -94,7 +94,7 @@ namespace CoreMedia {
             case AVMEDIA_TYPE_AUDIO: {
                 if ( dec_ctx->ch_layout.order == AV_CHANNEL_ORDER_UNSPEC ) av_channel_layout_default(&dec_ctx->ch_layout, dec_ctx->ch_layout.nb_channels);
                 AVBufferSrcParameters *params = av_buffersrc_parameters_alloc();
-                params->time_base = dec_ctx->time_base;
+                params->time_base = time_base;
                 params->sample_rate = dec_ctx->sample_rate;
                 params->format = dec_ctx->sample_fmt;
                 params->ch_layout = dec_ctx->ch_layout;

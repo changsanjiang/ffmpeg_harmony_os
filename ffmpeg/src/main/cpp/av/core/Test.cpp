@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <thread>
 #include <string>
+#include <sstream>
 
 extern "C" {
 #include <libavutil/opt.h>
@@ -470,6 +471,45 @@ namespace CoreMedia {
         if ( abuffersrc_params != nullptr ) av_free(abuffersrc_params);
     }
 
+
+    std::string makeAudioBufferSourceArgs(AVBufferSrcParameters* params) {
+        AVRational time_base = params->time_base;
+        int sample_rate = params->sample_rate;
+        AVSampleFormat sample_fmt = static_cast<AVSampleFormat>(params->format);
+        AVChannelLayout ch_layout = params->ch_layout;
+    
+        // get channel layout desc
+        char ch_layout_desc[64];
+        av_channel_layout_describe(&ch_layout, ch_layout_desc, sizeof(ch_layout_desc));
+        
+        std::stringstream src_ss;
+        src_ss  << "time_base=" << time_base.num << "/" << time_base.den
+                << ":sample_rate=" << sample_rate
+                << ":sample_fmt=" << av_get_sample_fmt_name(sample_fmt)
+                << ":channel_layout=" << ch_layout_desc;
+        return src_ss.str();
+    }
+
+    std::string makeVideoBufferSourceArgs(AVBufferSrcParameters* params) {
+        AVRational time_base = params->time_base;
+        int width = params->width;
+        int height = params->height; 
+        AVPixelFormat pix_fmt = static_cast<AVPixelFormat>(params->format);
+        AVRational sar = params->sample_aspect_ratio;
+        AVRational frame_rate = params->frame_rate;
+    
+        std::stringstream src_ss;
+        src_ss  << "video_size=" << width << "x" << height
+                << ":pix_fmt=" << pix_fmt
+                << ":time_base=" << time_base.num << "/" << time_base.den
+                << ":pixel_aspect=" << sar.num << "/" << sar.den;
+        if ( frame_rate.num ) {
+            src_ss << ":frame_rate=" << frame_rate.num << "/" << frame_rate.den;
+        }
+        return src_ss.str();
+    }
+
+
     void testFilterGraph2(const std::string& url) {
         client_print_message3("AAAA: [Test] url=%s", url.c_str());
     
@@ -552,17 +592,11 @@ namespace CoreMedia {
             goto end;
         }
     
-//         if ( dec_ctx->ch_layout.order == AV_CHANNEL_ORDER_UNSPEC ) av_channel_layout_default(&dec_ctx->ch_layout, dec_ctx->ch_layout.nb_channels);
         a_src_params = audioDecoder->createBufferSrcParameters();
-        abuffersrc_ctx = avfilter_graph_alloc_filter(filter_graph, abuffersrc, "0:a");
-        ret = av_buffersrc_parameters_set(abuffersrc_ctx, a_src_params);
+        client_print_message3("AAAA: [Test] audio src args=%s", makeAudioBufferSourceArgs(a_src_params).c_str());
+        ret = avfilter_graph_create_filter(&abuffersrc_ctx, abuffersrc, "0:a", makeAudioBufferSourceArgs(a_src_params).c_str(), NULL, filter_graph);
         if (ret < 0) {
             client_print_message3("AAAA: [Test][FilterGraph] Cannot create abuffer source");
-            goto end;
-        }
-        ret = avfilter_init_str(abuffersink_ctx, NULL);
-        if (ret < 0) {
-            client_print_message3("AAAA: [Test][FilterGraph] AA Cannot create abuffer source");
             goto end;
         }
     
@@ -591,8 +625,8 @@ namespace CoreMedia {
         }
     
         v_src_params = videoDecoder->createBufferSrcParameters();
-        vbuffersrc_ctx = avfilter_graph_alloc_filter(filter_graph, vbuffersrc, "0:v");
-        ret = av_buffersrc_parameters_set(vbuffersrc_ctx, v_src_params);
+        client_print_message3("AAAA: [Test] video src args=%s", makeVideoBufferSourceArgs(v_src_params).c_str());
+        ret = avfilter_graph_create_filter(&vbuffersrc_ctx, vbuffersrc, "0:v", makeVideoBufferSourceArgs(v_src_params).c_str(), NULL, filter_graph);
         if (ret < 0) {
             client_print_message3("AAAA: [Test][FilterGraph] Cannot create vbuffer source");
             goto end;

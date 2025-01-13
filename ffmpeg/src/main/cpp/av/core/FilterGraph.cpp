@@ -85,7 +85,7 @@ namespace CoreMedia {
                 << ":time_base=" << time_base.num << "/" << time_base.den
                 << ":pixel_aspect=" << sar.num << "/" << sar.den;
         if ( frame_rate.num ) {
-            src_ss << ":framerate=" << frame_rate.num << "/" << frame_rate.den;
+            src_ss << ":frame_rate=" << frame_rate.num << "/" << frame_rate.den;
         }
         AVFilterContext *vbuffersrc_ctx = nullptr;
         int ret = avfilter_graph_create_filter(&vbuffersrc_ctx, vbuffer, name.c_str(), src_ss.str().c_str(), NULL, filter_graph);
