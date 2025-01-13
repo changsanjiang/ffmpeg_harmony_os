@@ -7,7 +7,6 @@
 #ifndef FFMPEGPROJ_FILTERGRAPH_H
 #define FFMPEGPROJ_FILTERGRAPH_H
 
-#include <cstdint>
 #include <string>
 #include <unordered_map>
 
@@ -76,8 +75,6 @@ public:
          */
         int getFrame(const std::string& sink_name, AVFrame* _Nonnull frame);
 
-        int eof(const std::string& src_name);
-    
 private:
         AVFilterGraph* _Nullable filter_graph = nullptr;
         AVFilterInOut* _Nullable outputs = nullptr;

@@ -7,8 +7,7 @@
 #ifndef FFMPEGPROJ_MEDIADECODER_H
 #define FFMPEGPROJ_MEDIADECODER_H
 
-#include <string>
-
+#include "libavutil/rational.h"
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/packet.h>
@@ -24,7 +23,7 @@ public:
         MediaDecoder();
         ~MediaDecoder();
     
-        int prepare(AVStream* _Nonnull stream);
+        int prepare(AVCodecParameters* _Nonnull codecpar);
     
         int send(AVPacket* _Nullable pkt);
         
@@ -33,12 +32,10 @@ public:
         void flush();
     
         // 生成 buffersrc filter 的构建参数;
-        AVBufferSrcParameters* _Nullable createBufferSrcParameters();
+        AVBufferSrcParameters* _Nullable createBufferSrcParameters(AVRational time_base);
     
 private:
         AVCodecContext* _Nullable dec_ctx;      // AVCodecContext 用于解码
-        AVRational time_base;
-        int stream_index;
     
         // 关闭媒体文件
         void release();

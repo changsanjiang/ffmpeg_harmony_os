@@ -8,7 +8,7 @@
 #include <sstream>
 
 namespace CoreMedia {
-    MediaDecoder::MediaDecoder(): dec_ctx(nullptr), time_base({0, 1}) {
+    MediaDecoder::MediaDecoder(): dec_ctx(nullptr) {
     
     }
 
@@ -16,9 +16,8 @@ namespace CoreMedia {
         release();
     }
 
-    int MediaDecoder::prepare(AVStream* _Nonnull stream) {
+    int MediaDecoder::prepare(AVCodecParameters* _Nonnull codecpar) {
         // 获取解码器
-        AVCodecParameters* codecpar = stream->codecpar;
         const AVCodec* codec = avcodec_find_decoder(codecpar->codec_id);
         if ( codec == nullptr ) {
             return AVERROR_DECODER_NOT_FOUND; // 找不到解码器
@@ -42,18 +41,11 @@ namespace CoreMedia {
         if ( error < 0 ) {
             return error;
         }
-        
-        time_base = stream->time_base;
-        stream_index = stream->index;
         return 0;
     }
 
     int MediaDecoder::send(AVPacket* _Nullable pkt) {
         if ( dec_ctx == nullptr ) {
-            return AVERROR_INVALIDDATA;
-        }
-    
-        if ( pkt != nullptr && stream_index != pkt->stream_index ) {
             return AVERROR_INVALIDDATA;
         }
         
@@ -74,7 +66,7 @@ namespace CoreMedia {
         }
     }
 
-    AVBufferSrcParameters* _Nullable MediaDecoder::createBufferSrcParameters() {
+    AVBufferSrcParameters* _Nullable MediaDecoder::createBufferSrcParameters(AVRational time_base) {
         if ( dec_ctx == nullptr ) {
             return nullptr;
         }

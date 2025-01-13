@@ -5,7 +5,6 @@
 // please include "napi/native_api.h".
 
 #include "FilterGraph.h"
-#include "extension/client_print.h"
 #include <sstream>
 
 extern "C" {
@@ -269,15 +268,6 @@ namespace CoreMedia {
         }
         
         return av_buffersink_get_frame(buffersink_ctx, frame);
-    }
-
-    int FilterGraph::eof(const std::string& src_name) {
-        AVFilterContext *buffer_ctx = instances[src_name];
-        if ( buffer_ctx == nullptr ) {
-            return AVERROR_FILTER_NOT_FOUND;
-        }
-
-        return av_buffersrc_add_frame_flags(buffer_ctx, NULL, AV_BUFFERSRC_FLAG_PUSH);
     }
 
     void FilterGraph::release() {

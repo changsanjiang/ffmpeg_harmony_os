@@ -69,7 +69,7 @@ namespace CoreMedia {
         }
         
         decoder = new CoreMedia::MediaDecoder();
-        ret = decoder->prepare(reader->getStream(stream_idx));
+        ret = decoder->prepare(reader->getStream(stream_idx)->codecpar);
         client_print_message3("AAAA: [Test][MediaDecoder] prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
@@ -131,7 +131,7 @@ namespace CoreMedia {
         }
     
         decoder = new CoreMedia::MediaDecoder();
-        ret = decoder->prepare(reader->getStream(stream_idx));
+        ret = decoder->prepare(reader->getStream(stream_idx)->codecpar);
         client_print_message3("AAAA: [Test][MediaDecoder] prepared with status: %d %s", ret, av_err2str(ret));
         if ( ret < 0 ) {
             goto end;
@@ -264,6 +264,7 @@ namespace CoreMedia {
         AVFilterInOut *outputs = nullptr;
         AVFilterInOut *inputs  = nullptr;
         AVFrame *filt_frame = nullptr;
+        const AVStream *astream = nullptr;
     
         AVBufferSrcParameters *abuffersrc_params = nullptr;
         const char *filter_descr = "aresample=44100,aformat=sample_fmts=s16:channel_layouts=mono";
@@ -287,7 +288,8 @@ namespace CoreMedia {
         }
     
         decoder = new CoreMedia::MediaDecoder();
-        ret = decoder->prepare(reader->getBestStream(AVMEDIA_TYPE_AUDIO));
+        astream = reader->getStream(stream_idx);
+        ret = decoder->prepare(astream->codecpar);
         client_print_message3("AAAA: [Test][MediaDecoder] prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
@@ -300,7 +302,7 @@ namespace CoreMedia {
         }
     
         buffersink_ctx = avfilter_graph_alloc_filter(filter_graph, abuffersrc, "in");
-        abuffersrc_params = decoder->createBufferSrcParameters();
+        abuffersrc_params = decoder->createBufferSrcParameters(astream->time_base);
         ret = av_buffersrc_parameters_set(buffersink_ctx, abuffersrc_params);
         if (ret < 0) {
             client_print_message3("AAAA: [Test][FilterGraph] Cannot create buffer source");
@@ -519,6 +521,8 @@ namespace CoreMedia {
         CoreMedia::MediaDecoder* videoDecoder = nullptr;
         int audio_stream_idx = -1;
         int video_stream_idx = -1;
+        const AVStream* astream = nullptr;
+        const AVStream* vstream = nullptr;
         AVPacket *pkt = nullptr;
         AVFrame *frame = nullptr;
     
@@ -574,14 +578,16 @@ namespace CoreMedia {
         }
     
         audioDecoder = new CoreMedia::MediaDecoder();
-        ret = audioDecoder->prepare(reader->getStream(audio_stream_idx));
+        astream = reader->getStream(audio_stream_idx);
+        ret = audioDecoder->prepare(astream->codecpar);
         client_print_message3("AAAA: [Test][MediaDecoder] audioDecoder prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
         }
     
         videoDecoder = new CoreMedia::MediaDecoder();
-        ret = videoDecoder->prepare(reader->getStream(video_stream_idx));
+        vstream = reader->getStream(video_stream_idx);
+        ret = videoDecoder->prepare(vstream->codecpar);
         client_print_message3("AAAA: [Test][MediaDecoder] videoDecoder prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
@@ -593,7 +599,7 @@ namespace CoreMedia {
             goto end;
         }
     
-        a_src_params = audioDecoder->createBufferSrcParameters();
+        a_src_params = audioDecoder->createBufferSrcParameters(astream->time_base);
         client_print_message3("AAAA: [Test] audio src args=%s", makeAudioBufferSourceArgs(a_src_params).c_str());
         ret = avfilter_graph_create_filter(&abuffersrc_ctx, abuffersrc, "0:a", makeAudioBufferSourceArgs(a_src_params).c_str(), NULL, filter_graph);
         if (ret < 0) {
@@ -625,7 +631,7 @@ namespace CoreMedia {
             goto end;
         }
     
-        v_src_params = videoDecoder->createBufferSrcParameters();
+        v_src_params = videoDecoder->createBufferSrcParameters(vstream->time_base);
         client_print_message3("AAAA: [Test] video src args=%s", makeVideoBufferSourceArgs(v_src_params).c_str());
         ret = avfilter_graph_create_filter(&vbuffersrc_ctx, vbuffersrc, "0:v", makeVideoBufferSourceArgs(v_src_params).c_str(), NULL, filter_graph);
         if (ret < 0) {
@@ -905,6 +911,8 @@ namespace CoreMedia {
         int ret = 0;
         int audio_stream_idx = -1;
         int video_stream_idx = -1;
+        const AVStream* astream = nullptr;
+        const AVStream* vstream = nullptr;
 
         const char *filter_descr =  
                                     "[0:a]aresample=44100,aformat=sample_fmts=s16:channel_layouts=mono[outa];"
@@ -941,14 +949,16 @@ namespace CoreMedia {
     
         // create decoder
         audioDecoder = new CoreMedia::MediaDecoder();
-        ret = audioDecoder->prepare(reader->getStream(audio_stream_idx));
+        astream = reader->getStream(audio_stream_idx);
+        ret = audioDecoder->prepare(astream->codecpar);
         client_print_message3("AAAA: [Test][MediaDecoder] audioDecoder prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
         }
     
         videoDecoder = new CoreMedia::MediaDecoder();
-        ret = videoDecoder->prepare(reader->getStream(video_stream_idx));
+        vstream = reader->getStream(video_stream_idx);
+        ret = videoDecoder->prepare(vstream->codecpar);
         client_print_message3("AAAA: [Test][MediaDecoder] videoDecoder prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
@@ -962,7 +972,7 @@ namespace CoreMedia {
             goto end;
         }
     
-        a_src_params = audioDecoder->createBufferSrcParameters();
+        a_src_params = audioDecoder->createBufferSrcParameters(astream->time_base);
         client_print_message3("AAAA: [Test] audio src args=%s", makeAudioBufferSourceArgs(a_src_params).c_str());
         ret = filterGraph->addBufferSourceFilter("0:a", AVMEDIA_TYPE_AUDIO, a_src_params);
         if ( ret < 0 ) {
@@ -970,7 +980,7 @@ namespace CoreMedia {
             goto end;
         }
     
-        v_src_params = videoDecoder->createBufferSrcParameters();
+        v_src_params = videoDecoder->createBufferSrcParameters(vstream->time_base);
         client_print_message3("AAAA: [Test] video src args=%s", makeVideoBufferSourceArgs(v_src_params).c_str());
         ret = filterGraph->addBufferSourceFilter("0:v", AVMEDIA_TYPE_VIDEO, v_src_params);
         if ( ret < 0 ) {
