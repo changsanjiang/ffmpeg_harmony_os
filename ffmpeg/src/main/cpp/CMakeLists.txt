@@ -12,10 +12,10 @@ include_directories(${NATIVERENDER_ROOT_PATH}
                     ${NATIVERENDER_ROOT_PATH}/include)
 
 # 自动查找 src 目录下所有 .cpp 文件
-file(GLOB SOURCES "fftools/*.c" "napi_init.cpp" "extension/*.c" "extension/*.cpp" "av/**/*.cpp")
+file(GLOB SOURCES "fftools/*.c" "napi_init.cpp" "extension/*.c" "extension/*.cpp")
 
 # 自动查找 include 目录下所有 .h 文件
-file(GLOB HEADERS "fftools/*.h" "extension/*.h" "av/**/*.h")
+file(GLOB HEADERS "fftools/*.h" "extension/*.h")
 
 add_library(ffmpeg SHARED ${SOURCES} ${HEADERS})
 target_link_libraries(ffmpeg PUBLIC libace_napi.z.so)
@@ -50,6 +50,7 @@ target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/open
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/openssl_3_4_0/${OHOS_ARCH}/lib/libssl.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/opus/${OHOS_ARCH}/lib/libopus.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/x264/${OHOS_ARCH}/lib/libx264.a)
+target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/x265/${OHOS_ARCH}/lib/libx265.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/zlib_1_3_1/${OHOS_ARCH}/lib/libz.a)
 
 #将三方库的头文件加入工程中

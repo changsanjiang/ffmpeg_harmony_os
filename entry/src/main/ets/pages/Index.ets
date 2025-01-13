@@ -29,7 +29,8 @@ struct Index {
           // this.test2();
           // this.test3();
           // this.test4();
-          this.test();
+          // this.test5();
+          this.test6();
         })
     }
     .height('100%')
@@ -44,12 +45,6 @@ struct Index {
 
     FileMgr.copyRawFileToPath(getContext(this), 'input.mp4', this.mp4Path, { checkExistence: true, returnIfExists: true });
     FileMgr.copyRawFileToPath(getContext(this), 'loading.gif', this.gifPath, { checkExistence: true, returnIfExists: true });
-  }
-
-  async test(): Promise<void> {
-    let url = "https://xy2.v.netease.com/2020/dhp/eqokwojw16.mp4";
-    url = await MCMediaCache.proxy(url);
-    FFmpeg.test(url);
   }
 
   test1() {
@@ -164,6 +159,26 @@ struct Index {
     }).then(() => {
       console.info(`Execution succeeded with output: ${output}`);
       this.message = output;
+    }).catch((error: Error) => {
+      console.error(`Execution failed with error: ${error.message}`);
+    });
+  }
+
+  test6() {
+    // let commands = ["ffmpeg", "--help"];
+    // let commands = ["ffprobe", "--help"];
+    let cacheDir = getContext(this).cacheDir;
+    let inputPath = this.mp4Path; // 输入文件的路径, 可以是本地路径也可以是远程路径;
+    let outputPath = cacheDir + `/output_6.mp4`;
+    let commands = ["ffmpeg", "-i", inputPath, "-c:a", "copy", "-c:v", "libx265", outputPath, "-y", "-v", "info"];
+
+    console.log(`[Commands] ${commands.join(" ")}`);
+
+    FFmpeg.execute(commands, {
+      logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
+      progressCallback: (message: string) => console.log(`[progress]${JSON.stringify(FFProgressMessageParser.parse(message))}`),
+    }).then(() => {
+      console.info(`Execution succeeded with outputPath: ${outputPath}`);
     }).catch((error: Error) => {
       console.error(`Execution failed with error: ${error.message}`);
     });
