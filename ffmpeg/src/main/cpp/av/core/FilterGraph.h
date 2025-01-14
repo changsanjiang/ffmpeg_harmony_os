@@ -28,7 +28,7 @@ public:
     
         int init();
     
-        int addAudioBufferSourceFilter(const std::string& name, AVRational time_base, int sample_rate, AVSampleFormat sample_fmt, const AVChannelLayout ch_layout);
+        int addAudioBufferSourceFilter(const std::string& name, const AVRational time_base, int sample_rate, AVSampleFormat sample_fmt, const AVChannelLayout ch_layout);
         int addVideoBufferSourceFilter(const std::string& name, const AVRational time_base, int width, int height, AVPixelFormat pix_fmt, const AVRational sar, const AVRational frame_rate);
         int addBufferSourceFilter(const std::string& name, AVMediaType type, const AVBufferSrcParameters* params);
     
