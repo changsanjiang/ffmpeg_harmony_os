@@ -17,7 +17,7 @@ namespace CoreMedia {
     
     MediaReader::~MediaReader() { release(); }
     
-    int MediaReader::prepare() {
+    int MediaReader::open() {
         fmt_ctx = avformat_alloc_context();
         if ( fmt_ctx == nullptr ) {
             return AVERROR(ENOMEM);

@@ -20,8 +20,8 @@ public:
         ~AudioResampler();
     
         // 初始化
-        int prepare(const AVChannelLayout& in_ch_layout, int in_sample_rate, AVSampleFormat in_sample_fmt,
-                    const AVChannelLayout& out_ch_layout, int out_sample_rate, AVSampleFormat out_sample_fmt);
+        int init(const AVChannelLayout& in_ch_layout, int in_sample_rate, AVSampleFormat in_sample_fmt,
+                 const AVChannelLayout& out_ch_layout, int out_sample_rate, AVSampleFormat out_sample_fmt);
     
         // 重采样
         int resample(AVFrame* _Nonnull out_frame, const AVFrame* _Nonnull in_frame);

@@ -17,7 +17,7 @@ namespace CoreMedia {
     FilterGraph::FilterGraph() = default;
     FilterGraph::~FilterGraph() { release(); }
 
-    int FilterGraph::prepare() {
+    int FilterGraph::init() {
         filter_graph = avfilter_graph_alloc();
         if ( filter_graph == nullptr ) {
             return AVERROR(ENOMEM);

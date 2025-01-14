@@ -16,7 +16,7 @@ namespace CoreMedia {
         release();
     }
 
-    int MediaDecoder::prepare(AVCodecParameters* _Nonnull codecpar) {
+    int MediaDecoder::init(AVCodecParameters* _Nonnull codecpar) {
         // 获取解码器
         const AVCodec* codec = avcodec_find_decoder(codecpar->codec_id);
         if ( codec == nullptr ) {

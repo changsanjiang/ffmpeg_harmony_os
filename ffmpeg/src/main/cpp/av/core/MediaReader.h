@@ -26,7 +26,7 @@ namespace CoreMedia {
         ~MediaReader();
     
         // 打开媒体文件
-        int prepare();
+        int open();
         
         // 获取流的数量
         int getStreamCount();

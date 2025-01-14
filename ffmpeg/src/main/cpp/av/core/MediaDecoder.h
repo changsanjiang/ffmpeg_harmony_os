@@ -23,7 +23,7 @@ public:
         MediaDecoder();
         ~MediaDecoder();
     
-        int prepare(AVCodecParameters* _Nonnull codecpar);
+        int init(AVCodecParameters* _Nonnull codecpar);
     
         int send(AVPacket* _Nullable pkt);
         

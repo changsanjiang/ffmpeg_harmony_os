@@ -20,7 +20,7 @@ namespace CoreMedia {
     
     AudioResampler::~AudioResampler() { release(); }
 
-    int AudioResampler::prepare(const AVChannelLayout& in_ch_layout, int in_sample_rate, AVSampleFormat in_sample_fmt,
+    int AudioResampler::init(const AVChannelLayout& in_ch_layout, int in_sample_rate, AVSampleFormat in_sample_fmt,
                                 const AVChannelLayout& out_ch_layout, int out_sample_rate, AVSampleFormat out_sample_fmt) {
         if ( swr_ctx != nullptr ) {
             return AVERROR(EAGAIN);

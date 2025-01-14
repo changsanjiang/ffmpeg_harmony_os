@@ -28,7 +28,7 @@ namespace CoreMedia {
         client_print_message3("AAAA: [Test] url=%s", url.c_str());
     
         CoreMedia::MediaReader* reader = new CoreMedia::MediaReader(url);
-        int ret = reader->prepare();
+        int ret = reader->open();
         client_print_message3("AAAA: [Test][MediaReader] prepared with status: %d", ret);
         
         int nb_streams = reader->getStreamCount();
@@ -56,7 +56,7 @@ namespace CoreMedia {
         int stream_idx = -1;
     
         reader = new CoreMedia::MediaReader(url);
-        ret = reader->prepare();
+        ret = reader->open();
         client_print_message3("AAAA: [Test][MediaReader] prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
@@ -69,7 +69,7 @@ namespace CoreMedia {
         }
         
         decoder = new CoreMedia::MediaDecoder();
-        ret = decoder->prepare(reader->getStream(stream_idx)->codecpar);
+        ret = decoder->init(reader->getStream(stream_idx)->codecpar);
         client_print_message3("AAAA: [Test][MediaDecoder] prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
@@ -118,7 +118,7 @@ namespace CoreMedia {
         int stream_idx = -1;
     
         reader = new CoreMedia::MediaReader(url);
-        ret = reader->prepare();
+        ret = reader->open();
         client_print_message3("AAAA: [Test][MediaReader] prepared with status: %d %s", ret, av_err2str(ret));
         if ( ret < 0 ) {
             goto end;
@@ -131,7 +131,7 @@ namespace CoreMedia {
         }
     
         decoder = new CoreMedia::MediaDecoder();
-        ret = decoder->prepare(reader->getStream(stream_idx)->codecpar);
+        ret = decoder->init(reader->getStream(stream_idx)->codecpar);
         client_print_message3("AAAA: [Test][MediaDecoder] prepared with status: %d %s", ret, av_err2str(ret));
         if ( ret < 0 ) {
             goto end;
@@ -275,7 +275,7 @@ namespace CoreMedia {
         int ret = 0;
     
         reader = new CoreMedia::MediaReader(url);
-        ret = reader->prepare();
+        ret = reader->open();
         client_print_message3("AAAA: [Test][MediaReader] prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
@@ -289,7 +289,7 @@ namespace CoreMedia {
     
         decoder = new CoreMedia::MediaDecoder();
         astream = reader->getStream(stream_idx);
-        ret = decoder->prepare(astream->codecpar);
+        ret = decoder->init(astream->codecpar);
         client_print_message3("AAAA: [Test][MediaDecoder] prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
@@ -559,7 +559,7 @@ namespace CoreMedia {
         int ret = 0;
     
         reader = new CoreMedia::MediaReader(url);
-        ret = reader->prepare();
+        ret = reader->open();
         client_print_message3("AAAA: [Test][MediaReader] prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
@@ -579,7 +579,7 @@ namespace CoreMedia {
     
         audioDecoder = new CoreMedia::MediaDecoder();
         astream = reader->getStream(audio_stream_idx);
-        ret = audioDecoder->prepare(astream->codecpar);
+        ret = audioDecoder->init(astream->codecpar);
         client_print_message3("AAAA: [Test][MediaDecoder] audioDecoder prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
@@ -587,7 +587,7 @@ namespace CoreMedia {
     
         videoDecoder = new CoreMedia::MediaDecoder();
         vstream = reader->getStream(video_stream_idx);
-        ret = videoDecoder->prepare(vstream->codecpar);
+        ret = videoDecoder->init(vstream->codecpar);
         client_print_message3("AAAA: [Test][MediaDecoder] videoDecoder prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
@@ -929,7 +929,7 @@ namespace CoreMedia {
 
         // open file 
         reader = new CoreMedia::MediaReader(url);
-        ret = reader->prepare();
+        ret = reader->open();
         client_print_message3("AAAA: [Test][MediaReader] prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
@@ -950,7 +950,7 @@ namespace CoreMedia {
         // create decoder
         audioDecoder = new CoreMedia::MediaDecoder();
         astream = reader->getStream(audio_stream_idx);
-        ret = audioDecoder->prepare(astream->codecpar);
+        ret = audioDecoder->init(astream->codecpar);
         client_print_message3("AAAA: [Test][MediaDecoder] audioDecoder prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
@@ -958,7 +958,7 @@ namespace CoreMedia {
     
         videoDecoder = new CoreMedia::MediaDecoder();
         vstream = reader->getStream(video_stream_idx);
-        ret = videoDecoder->prepare(vstream->codecpar);
+        ret = videoDecoder->init(vstream->codecpar);
         client_print_message3("AAAA: [Test][MediaDecoder] videoDecoder prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
@@ -966,7 +966,7 @@ namespace CoreMedia {
     
         // create filter graph
         filterGraph = new CoreMedia::FilterGraph();
-        ret = filterGraph->prepare();
+        ret = filterGraph->init();
         client_print_message3("AAAA: [Test][FilterGraph] filterGraph prepared with status: %d", ret);
         if ( ret < 0 ) {
             goto end;
