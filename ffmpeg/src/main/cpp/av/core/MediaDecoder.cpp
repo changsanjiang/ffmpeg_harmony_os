@@ -5,7 +5,6 @@
 // please include "napi/native_api.h".
 
 #include "MediaDecoder.h"
-#include <sstream>
 
 namespace CoreMedia {
     MediaDecoder::MediaDecoder(): dec_ctx(nullptr) {
@@ -97,7 +96,7 @@ namespace CoreMedia {
             case AVMEDIA_TYPE_SUBTITLE:
             case AVMEDIA_TYPE_ATTACHMENT:
             case AVMEDIA_TYPE_NB:
-                break;
+                return nullptr;
         }
     }
 

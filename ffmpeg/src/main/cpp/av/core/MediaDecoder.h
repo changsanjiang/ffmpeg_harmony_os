@@ -7,13 +7,13 @@
 #ifndef FFMPEGPROJ_MEDIADECODER_H
 #define FFMPEGPROJ_MEDIADECODER_H
 
-#include "libavutil/rational.h"
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/packet.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/frame.h>
 #include <libavfilter/buffersrc.h>
+#include "libavutil/rational.h"
 }
 
 namespace CoreMedia {

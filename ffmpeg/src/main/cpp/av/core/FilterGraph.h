@@ -30,7 +30,7 @@ public:
     
         int addAudioBufferSourceFilter(const std::string& name, const AVRational time_base, int sample_rate, AVSampleFormat sample_fmt, const AVChannelLayout ch_layout);
         int addVideoBufferSourceFilter(const std::string& name, const AVRational time_base, int width, int height, AVPixelFormat pix_fmt, const AVRational sar, const AVRational frame_rate);
-        int addBufferSourceFilter(const std::string& name, AVMediaType type, const AVBufferSrcParameters* params);
+        int addBufferSourceFilter(const std::string& name, AVMediaType type, const AVBufferSrcParameters* _Nonnull params);
     
         int addAudioBufferSinkFilter(const std::string& name, const int* _Nullable sample_rates, const AVSampleFormat* _Nullable sample_fmts, const std::string& channel_layout);
         int addVideoBufferSinkFilter(const std::string& name, const AVPixelFormat* _Nullable pix_fmts);
@@ -88,8 +88,8 @@ private:
 
         const AVFilter* _Nullable abuffersink = nullptr;
         const AVFilter* _Nullable vbuffersink = nullptr;
-        int addBufferSourceFilter(const std::string& name, AVFilterContext* buffer_ctx);
-        int addBufferSinkFilter(const std::string& name, AVFilterContext* buffersink_ctx);
+        int addBufferSourceFilter(const std::string& name, AVFilterContext* _Nonnull buffer_ctx);
+        int addBufferSinkFilter(const std::string& name, AVFilterContext* _Nonnull buffersink_ctx);
         void release();
     };
 }

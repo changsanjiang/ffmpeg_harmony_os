@@ -97,7 +97,7 @@ namespace CoreMedia {
         return addBufferSourceFilter(name, vbuffersrc_ctx);
     }
 
-    int FilterGraph::addBufferSourceFilter(const std::string& name, AVMediaType type, const AVBufferSrcParameters* params) {
+    int FilterGraph::addBufferSourceFilter(const std::string& name, AVMediaType type, const AVBufferSrcParameters* _Nonnull params) {
         if ( instances[name] != nullptr ) {
             return AVERROR(EAGAIN);
         }
@@ -187,7 +187,7 @@ namespace CoreMedia {
         return addBufferSinkFilter(name, vbuffersink_ctx);    
     }
     
-    int FilterGraph::addBufferSourceFilter(const std::string& name, AVFilterContext* buffer_ctx) {
+    int FilterGraph::addBufferSourceFilter(const std::string& name, AVFilterContext* _Nonnull buffer_ctx) {
         AVFilterInOut *node = avfilter_inout_alloc();
         if ( node == nullptr ) {
             return AVERROR(ENOMEM);
@@ -209,7 +209,7 @@ namespace CoreMedia {
         return 0;    
     }
     
-    int FilterGraph::addBufferSinkFilter(const std::string& name, AVFilterContext* buffersink_ctx) {
+    int FilterGraph::addBufferSinkFilter(const std::string& name, AVFilterContext* _Nonnull buffersink_ctx) {
         AVFilterInOut *node = avfilter_inout_alloc();
         if ( node == nullptr ) {
             return AVERROR(ENOMEM);
