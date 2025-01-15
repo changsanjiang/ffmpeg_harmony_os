@@ -1064,7 +1064,7 @@ namespace CoreMedia {
         while(ret >= 0) {
             ret = filter_graph->getFrame(sink_name, frame);
         
-            client_print_message3("AAAA: [Test] buffersink get frame status: %d %s, fmt=%s, sample_rate=%d, nb_channels=%d, nb_samples=%d", ret, av_err2str(ret), ret >= 0 ? av_get_sample_fmt_name((AVSampleFormat)frame->format) : "null", ret >= 0 ? frame->sample_rate : 0, ret >= 0 ? frame->ch_layout.nb_channels : 0, ret >= 0 ? frame->nb_samples : 0);
+            client_print_message3("AAAA: [Test] buffersink get frame status: %d %s, fmt=%s, sample_rate=%d, nb_channels=%d, nb_samples=%d, pkt_dts=%d", ret, av_err2str(ret), ret >= 0 ? av_get_sample_fmt_name((AVSampleFormat)frame->format) : "null", ret >= 0 ? frame->sample_rate : 0, ret >= 0 ? frame->ch_layout.nb_channels : 0, ret >= 0 ? frame->nb_samples : 0, ret >= 0 ? frame->pkt_dts : 0);
 
             if ( ret == AVERROR_EOF ) {
                 std::lock_guard<std::mutex> lock(renderer_mutex);
@@ -1139,8 +1139,8 @@ namespace CoreMedia {
         
         AVSampleFormat out_sample_fmt = AV_SAMPLE_FMT_S16;
         int out_sample_rate = 48000;
-        int out_nb_channels = 2;
-        const char* out_channel_layout = "stereo";
+        int out_nb_channels = 1;
+        const char* out_channel_layout = "mono";
     
         std::stringstream filter_descr_ss;
         filter_descr_ss << "[0:a]"
