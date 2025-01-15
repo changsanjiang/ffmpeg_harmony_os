@@ -13,7 +13,7 @@ namespace CoreMedia {
 
     int AudioFifo::init(AVSampleFormat sample_fmt, int nb_channels, int nb_samples) {
         if ( fifo != nullptr ) {
-            return AVERROR(EAGAIN);
+            throw std::runtime_error("AudioFifo is already initialized");
         }
         
         fifo = av_audio_fifo_alloc(sample_fmt, nb_channels, nb_samples);

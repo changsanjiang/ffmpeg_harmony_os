@@ -55,3 +55,6 @@ target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/zlib
 
 #将三方库的头文件加入工程中
 target_include_directories(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/FFmpeg/${OHOS_ARCH}/include)
+
+#OHAudio
+target_link_libraries(ffmpeg PRIVATE libohaudio.so)
