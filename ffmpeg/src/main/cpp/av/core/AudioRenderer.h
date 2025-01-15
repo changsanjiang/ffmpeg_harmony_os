@@ -20,7 +20,7 @@ public:
         OH_AudioStream_Result init(
             OH_AudioStream_SampleFormat sample_fmt, 
             int nb_channels, 
-            int nb_samples,
+            int sample_rate,
             OH_AudioStream_Usage usage = AUDIOSTREAM_USAGE_MUSIC
         );
     

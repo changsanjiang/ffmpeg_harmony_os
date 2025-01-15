@@ -7,10 +7,12 @@
 #include "Test.h"
 #include "MediaReader.h"
 #include "MediaDecoder.h"
+#include "av/core/AudioFifo.h"
+#include "av/core/AudioRenderer.h"
 #include "av/core/FilterGraph.h"
 #include "extension/client_print.h"
-#include <bits/errno.h>
 #include <cstddef>
+#include <cstdint>
 #include <thread>
 #include <string>
 #include <sstream>
@@ -897,7 +899,6 @@ namespace CoreMedia {
         return ret;
     }
 
-
     void testFilterGraph3(const std::string& url) {
         client_print_message3("AAAA: [Test] url=%s", url.c_str());
             
@@ -1054,10 +1055,274 @@ namespace CoreMedia {
         if ( filt_frame != nullptr ) av_frame_free(&filt_frame);
     }
 
+    static bool filt_eof = false;
+    static std::mutex renderer_mutex;
+
+    int filter_get_frame(AudioFifo* fifo, const std::string& sink_name, CoreMedia::FilterGraph* filter_graph) {
+        int ret = 0;
+        AVFrame* frame = av_frame_alloc();
+        while(ret >= 0) {
+            ret = filter_graph->getFrame(sink_name, frame);
+        
+            client_print_message3("AAAA: [Test] buffersink get frame status: %d %s, fmt=%s, sample_rate=%d, nb_channels=%d, nb_samples=%d", ret, av_err2str(ret), ret >= 0 ? av_get_sample_fmt_name((AVSampleFormat)frame->format) : "null", ret >= 0 ? frame->sample_rate : 0, ret >= 0 ? frame->ch_layout.nb_channels : 0, ret >= 0 ? frame->nb_samples : 0);
+
+            if ( ret == AVERROR_EOF ) {
+                std::lock_guard<std::mutex> lock(renderer_mutex);
+                filt_eof = true;
+                break;
+            }
+        
+            if ( ret < 0 ) {
+                break;
+            }
+            
+            std::lock_guard<std::mutex> lock(renderer_mutex);
+            ret = fifo->write((void**)frame->data, frame->nb_samples);
+            client_print_message3("AAAA: [Test] fifo write frame status: %d %s", ret, av_err2str(ret));
+            av_frame_unref(frame);
+        }
+        av_frame_free(&frame);
+        return ret;
+    }
+
+    int filter_add_frame(AudioFifo* fifo, AVFrame *frame, const std::string& src_name, const std::string& sink_name, CoreMedia::FilterGraph* filter_graph) {
+        int flags = frame != nullptr ? AV_BUFFERSRC_FLAG_KEEP_REF : AV_BUFFERSRC_FLAG_PUSH;
+        int ret = filter_graph->addFrame(src_name, frame, flags);
+        client_print_message3("AAAA: [Test] buffersrc add frame status: %d %s, fmt=%s, sample_rate=%d, nb_channels=%d, nb_samples=%d", ret, av_err2str(ret), frame != NULL ? av_get_sample_fmt_name((AVSampleFormat)frame->format) : "null", frame != NULL ? frame->sample_rate : 0, frame != NULL ? frame->ch_layout.nb_channels : 0, frame != NULL ? frame->nb_samples : 0);
+        if ( ret < 0 ) {
+            return ret;
+        }
+
+        return filter_get_frame(fifo, sink_name, filter_graph);
+    }
+
+    int decoder_receive_frame(AudioFifo* fifo, CoreMedia::MediaDecoder* decoder, const std::string& src_name, const std::string& sink_name, CoreMedia::FilterGraph* filter_graph) {
+        int ret = 0;
+        AVFrame *frame = av_frame_alloc();
+        while (ret >= 0) {
+            ret = decoder->receive(frame);
+            client_print_message3("AAAA: [Test] receive dec frame status: %d %s", ret, av_err2str(ret));
+            if ( ret == AVERROR_EOF ) {
+                ret = filter_add_frame(fifo, NULL, src_name, sink_name, filter_graph);
+                break;
+            }
+        
+            if ( ret < 0 ) {
+                break;
+            }
+            
+            ret = filter_add_frame(fifo, frame, src_name, sink_name, filter_graph);
+            av_frame_unref(frame);
+        }
+        av_frame_free(&frame);
+        return ret;
+    }
+
+    int decoder_send_pkt(AudioFifo* fifo, CoreMedia::MediaDecoder* decoder, AVPacket *pkt, const std::string& src_name, const std::string& sink_name, CoreMedia::FilterGraph* filter_graph) {
+        int ret = decoder->send(pkt);
+        client_print_message3("AAAA: [Test] send pkt status: %d %s", ret, av_err2str(ret));
+        if ( ret < 0 ) {
+            return ret;
+        }
+    
+        return decoder_receive_frame(fifo, decoder, src_name, sink_name, filter_graph);
+    }
+
+    void testRenderer(const std::string& url) {
+        client_print_message3("AAAA: [Test] url=%s", url.c_str());
+        
+        CoreMedia::MediaReader* reader = nullptr;
+        CoreMedia::MediaDecoder* audio_decoder = nullptr;
+        CoreMedia::FilterGraph* filter_graph = nullptr;
+        CoreMedia::AudioFifo* audio_fifo = nullptr;
+        CoreMedia::AudioRenderer* audio_renderer = nullptr;
+        
+        AVSampleFormat out_sample_fmt = AV_SAMPLE_FMT_S16;
+        int out_sample_rate = 48000;
+        int out_nb_channels = 1;
+        const char* out_channel_layout = "mono";
+    
+        std::stringstream filter_descr_ss;
+        filter_descr_ss << "[0:a]"
+                        << "aresample=" << out_sample_rate
+                        << ",aformat=sample_fmts=" << av_get_sample_fmt_name(out_sample_fmt) << ":channel_layouts=" << out_channel_layout
+                        << "[outa]";
+
+        std::string filter_descr = filter_descr_ss.str();
+        const AVSampleFormat out_sample_fmts[] = { out_sample_fmt, AV_SAMPLE_FMT_NONE };
+        const int out_sample_rates[] = { out_sample_rate, -1 };
+        OH_AudioStream_SampleFormat renderder_sample_fmt = AUDIOSTREAM_SAMPLE_S16LE;
+        const int renderer_sample_rate = out_sample_rate;
+    
+        client_print_message3("AAAA: [Test] out_sample_fmt=%s, out_samle_rate=%d, out_nb_channels=%d, out_channel_layout=%s, filter_descr=%s", av_get_sample_fmt_name(out_sample_fmt), out_sample_rate, out_nb_channels, out_channel_layout, filter_descr.c_str());
+        
+        AVPacket *pkt = nullptr;
+        AVFrame *frame = nullptr;
+        AVFrame *filt_frame = nullptr;
+        AVBufferSrcParameters* a_src_params = nullptr;
+        bool write_eof = false;
+
+        int ret = 0;
+        int audio_stream_idx = -1;
+        const AVStream* astream = nullptr;
+        OH_AudioStream_Result renderer_ret = AUDIOSTREAM_SUCCESS;
+    
+    
+        // open file 
+        reader = new CoreMedia::MediaReader(url);
+        ret = reader->open();
+        client_print_message3("AAAA: [Test][MediaReader] prepared with status: %d", ret);
+        if ( ret < 0 ) {
+            goto end;
+        }
+        
+        audio_stream_idx = reader->findBestStream(AVMEDIA_TYPE_AUDIO);
+        client_print_message3("AAAA: [Test][MediaReader] Found audio stream at index: %d", audio_stream_idx);
+        if ( audio_stream_idx < 0 ) {
+            goto end;
+        }
+
+        // create decoder
+        audio_decoder = new CoreMedia::MediaDecoder();
+        astream = reader->getStream(audio_stream_idx);
+        ret = audio_decoder->init(astream->codecpar);
+        client_print_message3("AAAA: [Test][MediaDecoder] audioDecoder prepared with status: %d", ret);
+        if ( ret < 0 ) {
+            goto end;
+        }
+    
+        // create filter graph
+        filter_graph = new CoreMedia::FilterGraph();
+        ret = filter_graph->init();
+        client_print_message3("AAAA: [Test][FilterGraph] filterGraph prepared with status: %d", ret);
+        if ( ret < 0 ) {
+            goto end;
+        }
+    
+        a_src_params = audio_decoder->createBufferSrcParameters(astream->time_base);
+        client_print_message3("AAAA: [Test] audio src args=%s", makeAudioBufferSourceArgs(a_src_params).c_str());
+        ret = filter_graph->addBufferSourceFilter("0:a", AVMEDIA_TYPE_AUDIO, a_src_params);
+        if ( ret < 0 ) {
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot create abuffer source");
+            goto end;
+        }
+    
+        ret = filter_graph->addAudioBufferSinkFilter("outa", out_sample_rates, out_sample_fmts, out_channel_layout);
+        if ( ret < 0 ) {
+            client_print_message3("AAAA: [Test][FilterGraph] Cannot create audio buffer sink");
+            goto end;
+        }
+    
+        ret = filter_graph->parse(filter_descr);
+        if ( ret < 0 ) {
+            client_print_message3("AAAA: [Test][FilterGraph] filter graph parse failed with status: %d", ret);
+            goto end;
+        }
+        
+        ret = filter_graph->configure();
+        if ( ret < 0 ) {
+            client_print_message3("AAAA: [Test][FilterGraph] filter graph config failed with status: %d", ret);
+            goto end;
+        }    
+    
+        audio_fifo = new CoreMedia::AudioFifo();
+        ret = audio_fifo->init(out_sample_fmt, out_nb_channels, 1);
+        if ( ret < 0 ) {
+            client_print_message3("AAAA: [Test][AudioFifo] AudioFifo init failed with status: %d", ret);
+            goto end;
+        }    
+        
+        audio_renderer = new CoreMedia::AudioRenderer();
+        renderer_ret = audio_renderer->init(renderder_sample_fmt, out_nb_channels, renderer_sample_rate);
+        if ( renderer_ret != AUDIOSTREAM_SUCCESS ) {
+            client_print_message3("AAAA: [Test][AudioRenderer] AudioRenderer init failed with status: %d", renderer_ret);
+            goto end;
+        }
+    
+        audio_renderer->setWriteDataCallback([&](void* _Nullable user_data, void* _Nonnull data, int32_t size) {
+            client_print_message3("AAAA: [Test] write data callback: %d, filt_eof=%d, write_eof=%d", size, filt_eof, write_eof);
+
+            if ( write_eof ) {
+                return AUDIO_DATA_CALLBACK_RESULT_INVALID;
+            }
+        
+            std::lock_guard<std::mutex> lock(renderer_mutex);
+            if ( audio_fifo->getSize() >= size || filt_eof ) {
+                int ret = audio_fifo->read(&data, size); 
+                client_print_message3("AAAA: [Test] fifo read status: %d, size=%d", ret, size);
+            
+                if (ret >= 0) {
+                    if (filt_eof && ret < size) {
+                        memset(static_cast<uint8_t*>(data) + ret, 0, size - ret);
+                        write_eof = true;
+                    }
+                    return AUDIO_DATA_CALLBACK_RESULT_VALID;
+                }
+            }
+            return AUDIO_DATA_CALLBACK_RESULT_INVALID;
+        }, nullptr);
+
+        renderer_ret = audio_renderer->play();
+    
+        if ( renderer_ret != AUDIOSTREAM_SUCCESS ) {
+            client_print_message3("AAAA: [Test][AudioRenderer] AudioRenderer play failed with status: %d", renderer_ret);
+            goto end;
+        }
+    
+        // decode & filter & renderer
+        pkt = av_packet_alloc();
+        frame = av_frame_alloc();
+        filt_frame = av_frame_alloc();
+        
+        while (ret >= 0 || ret == AVERROR(EAGAIN)) {
+            // read
+            ret = reader->readPacket(pkt);
+            client_print_message3("AAAA: [Test] read pkt status: %d %s", ret, av_err2str(ret));   
+        
+            if ( ret == AVERROR_EOF ) {
+                ret = decoder_send_pkt(audio_fifo, audio_decoder, NULL, "0:a", "outa", filter_graph);
+                break;
+            }
+        
+            if ( ret < 0 ) {
+                break;
+            }
+        
+            if ( pkt->stream_index == audio_stream_idx ) {
+                ret = decoder_send_pkt(audio_fifo, audio_decoder, pkt, "0:a", "outa", filter_graph);
+            }
+            av_packet_unref(pkt);
+        }
+    
+        {
+            std::thread wait([&] {
+                std::this_thread::sleep_for(std::chrono::seconds(12)); // 延迟 12 秒         
+            });
+        
+            wait.join();
+        }
+    
+        audio_renderer->stop();
+        
+        client_print_message3("AAAA: [Test] end");
+    
+    end:
+        if ( reader != nullptr ) delete reader;
+        if ( audio_decoder != nullptr ) delete audio_decoder;
+        if ( filter_graph != nullptr ) delete filter_graph;
+        if ( audio_fifo != nullptr ) delete audio_fifo;
+        if ( audio_renderer != nullptr ) delete audio_renderer;
+        if ( pkt != nullptr ) av_packet_free(&pkt);
+        if ( frame != nullptr ) av_frame_free(&frame);
+        if ( filt_frame != nullptr ) av_frame_free(&filt_frame);
+        if ( a_src_params != nullptr ) av_free(&a_src_params);
+    }
+
     void test(const std::string& url) {
 //         testMediaDecoder2(url);
 //         testFilterGraph(url);
-        testFilterGraph3(url);
+//         testFilterGraph3(url);
+        testRenderer(url);
     }
 }
 

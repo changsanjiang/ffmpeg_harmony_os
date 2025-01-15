@@ -42,7 +42,7 @@ namespace CoreMedia {
     OH_AudioStream_Result AudioRenderer::init(
         OH_AudioStream_SampleFormat sample_fmt, 
         int nb_channels, 
-        int nb_samples,
+        int sample_rate,
         OH_AudioStream_Usage usage
     ) {
         if ( builder != nullptr ) {
@@ -60,7 +60,7 @@ namespace CoreMedia {
         }
         
         // 设置音频采样率
-        res = OH_AudioStreamBuilder_SetSamplingRate(builder, nb_samples);
+        res = OH_AudioStreamBuilder_SetSamplingRate(builder, sample_rate);
         if ( res != AUDIOSTREAM_SUCCESS ) {
             goto end;
         }
