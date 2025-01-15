@@ -1139,8 +1139,8 @@ namespace CoreMedia {
         
         AVSampleFormat out_sample_fmt = AV_SAMPLE_FMT_S16;
         int out_sample_rate = 48000;
-        int out_nb_channels = 1;
-        const char* out_channel_layout = "mono";
+        int out_nb_channels = 2;
+        const char* out_channel_layout = "stereo";
     
         std::stringstream filter_descr_ss;
         filter_descr_ss << "[0:a]"
@@ -1200,7 +1200,7 @@ namespace CoreMedia {
         }
     
         a_src_params = audio_decoder->createBufferSrcParameters(astream->time_base);
-        client_print_message3("AAAA: [Test] audio src args=%s", makeAudioBufferSourceArgs(a_src_params).c_str());
+        client_print_message3("AAAA: [Test] audio src args=%s, nb_channels=%d", makeAudioBufferSourceArgs(a_src_params).c_str(), a_src_params->ch_layout.nb_channels);
         ret = filter_graph->addBufferSourceFilter("0:a", AVMEDIA_TYPE_AUDIO, a_src_params);
         if ( ret < 0 ) {
             client_print_message3("AAAA: [Test][FilterGraph] Cannot create abuffer source");
@@ -1245,12 +1245,12 @@ namespace CoreMedia {
             if ( write_eof ) {
                 return AUDIO_DATA_CALLBACK_RESULT_INVALID;
             }
-        
+
             std::lock_guard<std::mutex> lock(renderer_mutex);
             if ( audio_fifo->getSize() >= size || filt_eof ) {
                 int ret = audio_fifo->read(&data, size); 
                 client_print_message3("AAAA: [Test] fifo read status: %d, size=%d", ret, size);
-            
+
                 if (ret >= 0) {
                     if (filt_eof && ret < size) {
                         memset(static_cast<uint8_t*>(data) + ret, 0, size - ret);
@@ -1315,7 +1315,7 @@ namespace CoreMedia {
         if ( pkt != nullptr ) av_packet_free(&pkt);
         if ( frame != nullptr ) av_frame_free(&frame);
         if ( filt_frame != nullptr ) av_frame_free(&filt_frame);
-        if ( a_src_params != nullptr ) av_free(&a_src_params);
+        if ( a_src_params != nullptr ) av_free(a_src_params);
     }
 
     void test(const std::string& url) {
