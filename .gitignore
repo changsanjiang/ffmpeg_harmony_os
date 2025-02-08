@@ -12,3 +12,4 @@
 /.appanalyzer
 *.DS_Store
 **/BuildProfile.ets
+log.txt
