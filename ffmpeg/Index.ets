@@ -1,3 +1,2 @@
-export { default as FFmpeg } from './src/main/ets/components/FFmpeg'
-export { FFAudioPlayer, FFmpeg2, FFAbortController, FFAbortSignal } from 'libffmpeg.so'
+export { FFAudioPlayer, FFmpeg, FFAbortController, FFAbortSignal } from 'libffmpeg.so'
 export  { default as FFProgressMessageParser } from './src/main/ets/components/FFProgressMessageParser'
