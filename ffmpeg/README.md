@@ -1,6 +1,6 @@
 # FFmpeg for HarmonyOS
 
-1. 目前移植了 fftools/ffmpeg, fftools/ffprobe, 可以在App中执行 [ffmpeg](#1) 及 [ffprobe](#2) 相关的脚本命令, 支持并发; 
+1. 目前移植了 fftools/ffmpeg, fftools/ffprobe, 可以在App中执行 [ffmpeg](#执行-ffmpeg-命令) 及 [ffprobe](#2) 相关的脚本命令, 支持并发; 
 2. 基于 ffmpeg + AudioRenderer 封装的[音乐播放器](#3);
 
 #### 安装
