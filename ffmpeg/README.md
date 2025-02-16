@@ -19,7 +19,7 @@ ohpm i @sj/ffmpeg
 }
 ```
 
-<h4 id="1">执行 ffmpeg 命令:</h4>
+#### <span id="1">执行 ffmpeg 命令:</span>
 
 - 与在终端使用类似, 通过拼接 ffmpeg 命令执行脚本:
   ```typescript
@@ -54,7 +54,7 @@ ohpm i @sj/ffmpeg
   });
   ```
   
-<h4 id="2">执行 ffprobe 命令:</h4>
+#### <span id="2">执行 ffprobe 命令:</span>
 
 - 同样, 与在终端使用类似通过拼接 ffprobe 命令执行脚本, 如下获取输入音频文件的采样率、比特率等信息, 输出格式指定为 Json 格式:
   ```typescript
@@ -92,7 +92,7 @@ ohpm i @sj/ffmpeg
   });
   ```
   
-<h4 id="3">音乐播放器:</h4>
+#### <span id="3">音乐播放器:</span>
 
 - 基础操作
   ```typescript
