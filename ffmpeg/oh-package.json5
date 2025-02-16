@@ -11,6 +11,7 @@
   "repository": "https://gitee.com/changsanjiang/ffmpeg_harmony_os.git",
   "homepage": "https://gitee.com/changsanjiang/ffmpeg_harmony_os",
   "keywords": [
-    "ffmpeg"
+    "ffmpeg",
+    "audioplayer"
   ]
 }

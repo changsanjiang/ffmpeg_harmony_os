@@ -1,8 +1,7 @@
 # FFmpeg for HarmonyOS
 
-目前移植了 fftools/ffmpeg, fftools/ffprobe, 可以在App中执行 ffmpeg 及 ffprobe 相关的脚本命令;
-
-支持并发;
+1. 目前移植了 fftools/ffmpeg, fftools/ffprobe, 可以在App中执行 [ffmpeg](#执行-ffmpeg-命令) 及 [ffprobe](#执行-ffprobe-命令) 相关的脚本命令, 支持并发; 
+2. 基于 ffmpeg + AudioRenderer 封装的[音乐播放器](#音乐播放器);
 
 #### 安装
 ```shell
@@ -15,7 +14,7 @@ ohpm i @sj/ffmpeg
 ```json
 {
   "dependencies": {
-    "@sj/ffmpeg": "^1.0.9"
+    "@sj/ffmpeg": "^1.1.0"
   }
 }
 ```
@@ -23,72 +22,118 @@ ohpm i @sj/ffmpeg
 #### 执行 ffmpeg 命令:
 
 - 与在终端使用类似, 通过拼接 ffmpeg 命令执行脚本:
-    ```ts
-    import { FFProgressMessageParser, FFmpeg } from '@sj/ffmpeg';
-            
-    let commands = ["ffmpeg", "-i", inputPath, outputPath, "-y"];            
-    FFmpeg.execute(commands, {
-      logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
-      progressCallback: (message: string) => console.log(`[progress]${JSON.stringify(FFProgressMessageParser.parse(message))}`),
-    }).then(() => {
-      console.info("FFmpeg execution succeeded.");
-    }).catch((error: Error) => {
-      console.error(`FFmpeg execution failed with error: ${error.message}`);
-    });
-    ```
+  ```typescript
+  import { FFProgressMessageParser, FFmpeg } from '@sj/ffmpeg';
+          
+  let commands = ["ffmpeg", "-i", inputPath, outputPath, "-y"];            
+  FFmpeg.execute(commands, {
+    logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
+    progressCallback: (message: string) => console.log(`[progress]${JSON.stringify(FFProgressMessageParser.parse(message))}`),
+  }).then(() => {
+    console.info("FFmpeg execution succeeded.");
+  }).catch((error: Error) => {
+    console.error(`FFmpeg execution failed with error: ${error.message}`);
+  });
+  ```
 - 取消操作:
-    ```ts
-    import { FFProgressMessageParser, FFAbortController, FFmpeg } from '@sj/ffmpeg';
+  ```typescript
+  import { FFProgressMessageParser, FFAbortController, FFmpeg } from '@sj/ffmpeg';
   
-    let abortController = new FFAbortController(); // 创建 abortController, 在需要时终止脚本执行; 
-    setTimeout(() => abortController.abort(), 4000); // 模拟取消; 这里模拟取消, 延迟4s后取消操作; 
-    
-    let commands = ["ffmpeg", "-i", inputPath, outputPath, "-y"];
-    FFmpeg.execute(commands, {
-      logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
-      progressCallback: (message: string) => console.log(`[progress]${JSON.stringify(FFProgressMessageParser.parse(message))}`),
-      signal: abortController.signal //  传入 abortController.signal, 内部会监听取消信号;
-    }).then(() => { 
-      console.info("FFmpeg execution succeeded.");
-    }).catch((error: Error) => {
-      console.error(`FFmpeg execution failed with error: ${error.message}`);
-    });
-    ```
-
+  let abortController = new FFAbortController(); // 创建 abortController, 在需要时终止脚本执行; 
+  setTimeout(() => abortController.abort(), 4000); // 模拟取消; 这里模拟取消, 延迟4s后取消操作; 
+  
+  let commands = ["ffmpeg", "-i", inputPath, outputPath, "-y"];
+  FFmpeg.execute(commands, {
+    logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
+    progressCallback: (message: string) => console.log(`[progress]${JSON.stringify(FFProgressMessageParser.parse(message))}`),
+    signal: abortController.signal //  传入 abortController.signal, 内部会监听取消信号;
+  }).then(() => { 
+    console.info("FFmpeg execution succeeded.");
+  }).catch((error: Error) => {
+    console.error(`FFmpeg execution failed with error: ${error.message}`);
+  });
+  ```
+  
 #### 执行 ffprobe 命令:
 
 - 同样, 与在终端使用类似通过拼接 ffprobe 命令执行脚本, 如下获取输入音频文件的采样率、比特率等信息, 输出格式指定为 Json 格式:
-    ```ts
-    import { FFmpeg } from '@sj/ffmpeg';
-    
-    let commands = ["ffprobe", "-v", "info", "-of", "json", "-show_entries", "stream=sample_rate,bit_rate", "-i", inputPath];
-    let outputJson = "";
-    FFmpeg.execute(commands, {
-      logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
-      outputCallback: (message: string) => { outputJson += message; },
-    }).then(() => {
-      console.info(`Execution succeeded with output: ${outputJson}`);
-    }).catch((error: Error) => {
-      console.error(`Execution failed with error: ${error.message}`);
-    });
-    ```
+  ```typescript
+  import { FFmpeg } from '@sj/ffmpeg';
+  
+  let commands = ["ffprobe", "-v", "info", "-of", "json", "-show_entries", "stream=sample_rate,bit_rate", "-i", inputPath];
+  let outputJson = "";
+  FFmpeg.execute(commands, {
+    logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
+    outputCallback: (message: string) => { outputJson += message; },
+  }).then(() => {
+    console.info(`Execution succeeded with output: ${outputJson}`);
+  }).catch((error: Error) => {
+    console.error(`Execution failed with error: ${error.message}`);
+  });
+  ```
 - 取消操作:
-    ```ts
-    import { FFAbortController, FFmpeg } from '@sj/ffmpeg';
-    
-    let commands = ["ffprobe", "-v", "info", "-of", "json", "-show_entries", "stream=sample_rate,bit_rate", "-i", inputPath];
-    
-    let abortController = new FFAbortController(); // 创建 abortController, 在需要时终止脚本执行; 
-    setTimeout(() => abortController.abort(), 4000); // 模拟取消; 这里模拟取消, 延迟4s后取消操作; 
-    
-    let outputJson = "";
-    FFmpeg.execute(commands, {
-      logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
-      outputCallback: (message: string) => { outputJson += message; },
-      signal: abortController.signal //  传入 abortController.signal, 内部会监听取消信号;
-    }).then(() => {
-      console.info(`Execution succeeded with output: ${outputJson}`);
-    }).catch((error: Error) => {
-      console.error(`Execution failed with error: ${error.message}`);
-    });
-    ```
+  ```typescript
+  import { FFAbortController, FFmpeg } from '@sj/ffmpeg';
+  
+  let commands = ["ffprobe", "-v", "info", "-of", "json", "-show_entries", "stream=sample_rate,bit_rate", "-i", inputPath];
+  
+  let abortController = new FFAbortController(); // 创建 abortController, 在需要时终止脚本执行; 
+  setTimeout(() => abortController.abort(), 4000); // 模拟取消; 这里模拟取消, 延迟4s后取消操作; 
+  
+  let outputJson = "";
+  FFmpeg.execute(commands, {
+    logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
+    outputCallback: (message: string) => { outputJson += message; },
+    signal: abortController.signal //  传入 abortController.signal, 内部会监听取消信号;
+  }).then(() => {
+    console.info(`Execution succeeded with output: ${outputJson}`);
+  }).catch((error: Error) => {
+    console.error(`Execution failed with error: ${error.message}`);
+  });
+  ```
+  
+#### 音乐播放器:
+
+- 基础操作
+  ```typescript
+  import { FFAudioPlayer } from '@sj/ffmpeg';
+  
+  // 1. 创建音乐播放器
+  let audioPlayer = new FFAudioPlayer();
+  this.mAudioPlayer = audioPlayer; // 设置强引用, 避免被回收;
+  
+  // 2. 设置播放地址
+  audioPlayer.url = "http://xxx";
+  // 3. 播放
+  audioPlayer.play();
+  
+  // 暂停播放
+  // audioPlayer.pause();
+  // 停止播放并清理当前资源
+  // audioPlayer.stop();
+  ```
+- Seek 跳转到指定时间播放, 单位毫秒:
+  ```typescript
+  // 注意处于准备阶段时执行 Seek 无效:
+  audioPlayer.seek(time_ms);
+  ```
+- 属性
+  - `playWhenReady`: 标识播放器在准备阶段完成后, 是否立即进入播放阶段; 该属性目前为只读属性, 当调用 play 进行播放时会被设置为 true;
+    - 当 playWhenReady 为 true 时，播放器在完成准备阶段后, 会自动开始播放媒体内容;
+    - 当 playWhenReady 为 false 时，播放器在完成准备阶段后, 不会播放, 当调用 play 时才会开始播放;
+  - `duration`: 音乐时长, 单位毫秒; 当播放器加载资源成功后刷新;
+  - `currentTime`: 当前时间, 单位毫秒;
+  - `playableDuration`: 缓冲时长, 单位毫秒;
+  - `error`: 错误, 播放失败时有值;
+  - `volume`: 设置音量, 取值范围 \[0-1\];
+  - `speed`: 设置播放速度, 取值范围 \[0.25, 4.0\];
+- 状态监听
+  - `playWhenReadyChange`: playWhenReady 改变时回调; 触发回调可能有以下几个场景:
+    - 主动调用 play 或 pause;
+    - 音频流失去焦点或恢复焦点时;
+    - 耳机插拔;
+    - 播放结束;
+  - `durationChange`: 播放时长发生改变时回调;
+  - `currentTimeChange`: 当前时间发生改变时回调;
+  - `playableDurationChange`: 缓冲时长发生改变时回调;
+  - `errorChange`: 播放出错时回调或调用 stop 被设置为 undefined 时回调;
