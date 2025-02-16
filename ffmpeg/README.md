@@ -1,7 +1,7 @@
 # FFmpeg for HarmonyOS
 
-1. 目前移植了 fftools/ffmpeg, fftools/ffprobe, 可以在App中执行 [ffmpeg](#执行-ffmpeg-命令) 及 [ffprobe](#2) 相关的脚本命令, 支持并发; 
-2. 基于 ffmpeg + AudioRenderer 封装的[音乐播放器](#3);
+1. 目前移植了 fftools/ffmpeg, fftools/ffprobe, 可以在App中执行 [ffmpeg](#执行-ffmpeg-命令) 及 [ffprobe](#执行-ffprobe-命令) 相关的脚本命令, 支持并发; 
+2. 基于 ffmpeg + AudioRenderer 封装的[音乐播放器](#音乐播放器);
 
 #### 安装
 ```shell
@@ -19,7 +19,7 @@ ohpm i @sj/ffmpeg
 }
 ```
 
-#### <span id="1">执行 ffmpeg 命令:</span>
+#### 执行 ffmpeg 命令:
 
 - 与在终端使用类似, 通过拼接 ffmpeg 命令执行脚本:
   ```typescript
@@ -54,7 +54,7 @@ ohpm i @sj/ffmpeg
   });
   ```
   
-#### <span id="2">执行 ffprobe 命令:</span>
+#### 执行 ffprobe 命令:
 
 - 同样, 与在终端使用类似通过拼接 ffprobe 命令执行脚本, 如下获取输入音频文件的采样率、比特率等信息, 输出格式指定为 Json 格式:
   ```typescript
@@ -92,7 +92,7 @@ ohpm i @sj/ffmpeg
   });
   ```
   
-#### <span id="3">音乐播放器:</span>
+#### 音乐播放器:
 
 - 基础操作
   ```typescript
