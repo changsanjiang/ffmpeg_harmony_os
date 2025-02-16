@@ -26,6 +26,7 @@
 
 //#define DEBUG
 
+#include "av/audio/PlayWhenReadyChangeReason.h"
 #include "extension/client_print.h"
 
 namespace FFAV {
@@ -349,14 +350,21 @@ napi_value FFAudioPlayer::GetError(napi_env env, napi_callback_info info) {
     return ToJsError(env, obj->cur_error.load());
 }
 
-// js_func_play_when_ready_callback: (play_when_ready) => void
+// js_func_play_when_ready_callback: (play_when_ready, reason) => void
+struct PlayWhenReadyChangeData {
+    bool play_when_ready;
+    PlayWhenReadyChangeReason reason;
+}; 
+
 static void InvokeJsPlayWhenReadyChangeCallback(napi_env env, napi_value js_callback, void* context, void* data) {
-    bool* state = static_cast<bool*>(data);
+    PlayWhenReadyChangeData* state = static_cast<PlayWhenReadyChangeData*>(data);
     // 调用 JavaScript 回调
-    napi_value undefined, result;
+    napi_value undefined, play_when_ready, reason;
     napi_get_undefined(env, &undefined);
-    napi_get_boolean(env, *state, &result);
-    napi_call_function(env, undefined, js_callback, 1, &result, nullptr);
+    napi_get_boolean(env, state->play_when_ready, &play_when_ready);
+    napi_create_int32(env, static_cast<int32_t>(state->reason), &reason);
+    napi_value args[] = { play_when_ready, reason };
+    napi_call_function(env, undefined, js_callback, 2, args, nullptr);
     delete state;
 }
 
@@ -375,11 +383,18 @@ static void InvokeJsTimeChangeCallback(napi_env env, napi_value js_callback, voi
 
 // js_func_error_callback: (error) => void
 static void InvokeJsErrorChangeCallback(napi_env env, napi_value js_callback, void* context, void* data) {
-    FFAV::Error* original_err = static_cast<FFAV::Error*>(data);
-    napi_value undefined, error;
-    napi_get_undefined(env, &undefined);
-    error = ToJsError(env, original_err);
-    napi_call_function(env, undefined, js_callback, 1, &error, nullptr);
+    if ( data ) {
+        FFAV::Error* original_err = static_cast<FFAV::Error*>(data);
+        napi_value undefined, error;
+        napi_get_undefined(env, &undefined);
+        error = ToJsError(env, original_err);
+        napi_call_function(env, undefined, js_callback, 1, &error, nullptr);
+    }
+    else {
+        napi_value undefined;
+        napi_get_undefined(env, &undefined);
+        napi_call_function(env, undefined, js_callback, 1, &undefined, nullptr);
+    }
 }
 
 napi_value FFAudioPlayer::On(napi_env env, napi_callback_info info) {
@@ -526,7 +541,7 @@ void FFAudioPlayer::play() {
     if ( cur_error.load() ) {
         return;
     }
-    onPlayWhenReadyChange(true);
+    onPlayWhenReadyChange(true, FFAV::PlayWhenReadyChangeReason::USER_REQUEST);
 
     if ( createPlayer() ) {
         player->play();
@@ -537,7 +552,7 @@ void FFAudioPlayer::pause() {
     if ( cur_error.load() ) {
         return;
     }
-    onPlayWhenReadyChange(false);
+    onPlayWhenReadyChange(false, FFAV::PlayWhenReadyChangeReason::USER_REQUEST);
 
     if ( player != nullptr ) {
         player->pause();
@@ -554,7 +569,7 @@ void FFAudioPlayer::stop() {
     onCurrentTimeChange(0);
     onPlayableDurationChange(0);
     onDurationChange(0);
-    onPlayWhenReadyChange(false);
+    onPlayWhenReadyChange(false, FFAV::PlayWhenReadyChangeReason::USER_REQUEST);
 }
 
 void FFAudioPlayer::seek(int64_t time_ms) {
@@ -592,7 +607,8 @@ void FFAudioPlayer::setSpeed(float speed) {
 void FFAudioPlayer::onPlayerEvent(const FFAV::EventMessage* msg) {
     switch(msg->type) {
     case FFAV::EventType::MSG_PLAY_WHEN_READY_CHANGE: {
-        onPlayWhenReadyChange(static_cast<const FFAV::PlayWhenReadyChangeEventMessage*>(msg)->play_when_ready);
+        const FFAV::PlayWhenReadyChangeEventMessage* change_msg = static_cast<const FFAV::PlayWhenReadyChangeEventMessage*>(msg); 
+        onPlayWhenReadyChange(change_msg->play_when_ready, change_msg->reason);
     }
         break;
     case FFAV::EventType::MSG_DURATION_CHANGE: {
@@ -615,20 +631,15 @@ void FFAudioPlayer::onPlayerEvent(const FFAV::EventMessage* msg) {
     }
 }
 
-void FFAudioPlayer::onPlayWhenReadyChange(bool play_when_ready) {
+void FFAudioPlayer::onPlayWhenReadyChange(bool play_when_ready, PlayWhenReadyChangeReason reason) {
  #ifdef DEBUG
     client_print_message3("AAAA: FFAudioPlayer::onPlayWhenReadyChange(%d)", play_when_ready);
-#endif   
-    
-    if ( this->play_when_ready.load() == play_when_ready ) {
-        return;
-    }
-
+#endif
     this->play_when_ready.store(play_when_ready);
 
     if ( js_func_play_when_ready_callback ) {
-        bool* state = new bool(play_when_ready);
-        napi_call_threadsafe_function(js_func_play_when_ready_callback, state, napi_tsfn_nonblocking);
+        PlayWhenReadyChangeData* data = new PlayWhenReadyChangeData { play_when_ready, reason };
+        napi_call_threadsafe_function(js_func_play_when_ready_callback, data, napi_tsfn_nonblocking);
     }
 }
 
@@ -684,7 +695,7 @@ void FFAudioPlayer::onErrorChange(FFAV::Error* error) {
     cur_error.store(error);
 
     if ( js_func_error_change_callback ) {
-        napi_call_threadsafe_function(js_func_error_change_callback, error->copy(), napi_tsfn_nonblocking);
+        napi_call_threadsafe_function(js_func_error_change_callback, error ? error->copy() : nullptr, napi_tsfn_nonblocking);
     }
 }
 

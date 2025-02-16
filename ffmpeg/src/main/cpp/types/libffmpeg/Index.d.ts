@@ -60,6 +60,25 @@ export class FFAbortSignal {
   addEventListener(event: 'aborted', callback: (error: Error) => void): void;
 }
 
+export enum FFPlayWhenReadyChangeReason {
+  USER_REQUEST,
+  // 恢复播放
+  // 此分支表示临时失去焦点后被暂停的音频流此时可以继续播放，建议应用继续播放，切换至音频播放状态
+  // 若应用此时不想继续播放，可以忽略此音频焦点事件，不进行处理即可
+  // 继续播放，此处主动执行start()，以标识符变量started记录start()的执行结果
+  AUDIO_INTERRUPT_RESUME,
+  // 此分支表示系统已将音频流暂停（临时失去焦点），为保持状态一致，应用需切换至音频暂停状态
+  // 临时失去焦点：待其他音频流释放音频焦点后，本音频流会收到resume对应的音频焦点事件，到时可自行继续播放
+  AUDIO_INTERRUPT_PAUSE,
+  // 此分支表示系统已将音频流停止（永久失去焦点），为保持状态一致，应用需切换至音频暂停状态
+  // 永久失去焦点：后续不会再收到任何音频焦点事件，若想恢复播放，需要用户主动触发。
+  AUDIO_INTERRUPT_STOP,
+  // 耳机插拔
+  OLD_DEVICE_UNAVAILABLE,
+  // 播放结束
+  PLAYBACK_ENDED,
+}
+
 export class FFAudioPlayer {
   constructor();
 
@@ -96,7 +115,7 @@ export class FFAudioPlayer {
 
   public seek(time_ms: number);
 
-  public on(event: 'playWhenReadyChange', callback: (playWhenReady: boolean) => void);
+  public on(event: 'playWhenReadyChange', callback: (playWhenReady: boolean, reason: FFPlayWhenReadyChangeReason) => void);
 
   public on(event: 'durationChange', callback: (duration: number) => void);
 
@@ -104,7 +123,7 @@ export class FFAudioPlayer {
 
   public on(event: 'playableDurationChange', callback: (playableDuration: number) => void);
 
-  public on(event: 'errorChange', callback: (error: Error) => void);
+  public on(event: 'errorChange', callback: (error?: Error) => void);
 
   public off(event: 'playWhenReadyChange');
 

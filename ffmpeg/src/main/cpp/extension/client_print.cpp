@@ -29,29 +29,13 @@
 #include "hilog/log.h"
 
 EXTERN_C_START
-static bool ENABLED_PRINT = false;
-
-napi_value
-NAPI_Set_EnabledClientPrint(napi_env env, napi_callback_info info) {
-    size_t argc = 1;
-    int enabled_value_index = 0;
-    napi_value args[argc];
-    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
-    
-    bool enabled;
-    napi_get_value_bool(env, args[enabled_value_index], &enabled);
-    ENABLED_PRINT = enabled;
-    return nullptr;
-}        
 
 #undef LOG_TAG
-#define LOG_TAG "SJ_FFMPEG"  
+#define LOG_TAG "FFAV_LOG"  
 
 /// 客户端打印消息
 void client_print_message(const char *msg) {
-    if ( ENABLED_PRINT ) {
-        OH_LOG_INFO(LOG_APP, msg, NULL);
-    }
+    OH_LOG_INFO(LOG_APP, msg, NULL);
 }
 
 /// 客户端打印消息

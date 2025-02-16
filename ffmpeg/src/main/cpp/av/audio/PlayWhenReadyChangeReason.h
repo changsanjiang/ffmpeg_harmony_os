@@ -37,7 +37,7 @@ namespace FFAV {
         // 永久失去焦点：后续不会再收到任何音频焦点事件，若想恢复播放，需要用户主动触发。
         AUDIO_INTERRUPT_STOP,
         OLD_DEVICE_UNAVAILABLE,
-        RENDER_END,
+        PLAYBACK_ENDED,
     };
 }
 #endif //FFMPEGPROJ_PLAYWHENREADYCHANGEREASON_H

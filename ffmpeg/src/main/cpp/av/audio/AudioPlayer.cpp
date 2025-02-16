@@ -69,9 +69,16 @@ void AudioPlayer::seek(int64_t time_pos_ms) {
     }
     if ( time_pos_ms < 0 ) time_pos_ms = 0;
     else if ( time_pos_ms > duration_ms ) time_pos_ms = duration_ms;
+    int64_t time = av_rescale_q(time_pos_ms, (AVRational){ 1, 1000 }, AV_TIME_BASE_Q);
+    
+    if ( time == cur_seek_time ) {
+#ifdef DEBUG
+        client_print_message3("AAAA: AudioPlayer::seek: duplicate seek operation");
+#endif
+        return;
+    }
     flags.wants_seek = true;
-    seek_time_ms = time_pos_ms;
-    audio_reader->interrupt();
+    seek_time = time;
     lock.unlock();
     cv.notify_all();
 }
@@ -82,7 +89,7 @@ void AudioPlayer::onRelease(std::unique_lock<std::mutex>& lock) {
     }
     
 #ifdef DEBUG
-    client_print_message3("AAAA: release before");
+    client_print_message3("AAAA: AudioPlayer::onRelease before");
 #endif
     
     flags.release_invoked = true;
@@ -149,7 +156,7 @@ void AudioPlayer::onRelease(std::unique_lock<std::mutex>& lock) {
     }
     
 #ifdef DEBUG
-    client_print_message3("AAAA: release after");
+    client_print_message3("AAAA: AudioPlayer::onRelease after");
 #endif
 }
 
@@ -247,12 +254,13 @@ void AudioPlayer::InitThread() {
     lock.unlock();
     // init reader
     ff_ret = audio_reader->open(url);
-    if ( ff_ret < 0 ) {
-        goto exit_thread;
-    }
     
     lock.lock();
     if ( flags.has_error || flags.release_invoked ) {
+        goto exit_thread;
+    }
+    
+    if ( ff_ret < 0 ) {
         goto exit_thread;
     }
     
@@ -385,6 +393,7 @@ restart:
             else if ( flags.wants_seek ) {
                 flags.wants_seek = false;
                 flags.is_seeking = true;
+                cur_seek_time = seek_time;
                 should_seek = true;
                 should_notify = true;
             }
@@ -412,11 +421,7 @@ restart:
         
         // handle seek
         if ( should_seek ) {
-#ifdef DEBUG
-            client_print_message3("AAAA: seek to %ld", seek_time_ms);
-#endif
-            int64_t seek_time = av_rescale_q(seek_time_ms, (AVRational){ 1, 1000 }, AV_TIME_BASE_Q);
-            ret = audio_reader->seek(seek_time, -1);
+            ret = audio_reader->seek(cur_seek_time, -1);
             
             std::lock_guard<std::mutex> lock(mtx);
             if ( flags.has_error || flags.release_invoked ) {
@@ -425,11 +430,6 @@ restart:
             else if ( ret < 0 ) {
                 if ( ret == AVERROR_EOF ) {
                     // nothing
-                }
-                else if ( ret == AVERROR_EXIT ) {
-                    // interrupted
-                    // restart
-                    should_restart = true;
                 }
                 else {
                     // error
@@ -455,6 +455,7 @@ restart:
                     flags.is_read_eof = false;
                     flags.is_dec_eof = false;
                     flags.is_render_eof = false;
+                    flags.is_playback_ended = false;
                     should_notify = true;
                 }
             }
@@ -476,18 +477,13 @@ restart:
                 should_exit = true;
             }
             else if ( ret < 0 ) {
-                if ( ret == AVERROR_EXIT ) {
-                    // interrupted
-                    // nothing
-                }
-                else if ( ret == AVERROR_EOF ) {
+                if ( ret == AVERROR_EOF ) {
 #ifdef DEBUG
                     client_print_message3("AAAA: read eof");
 #endif
-                    
                     // read eof
                     flags.is_read_eof = true;
-                    last_pkt_pts_or_end_time_ms = duration_ms;
+                    playable_duration_ms = duration_ms;
                     onEvent(new PlayableDurationChangeEventMessage(duration_ms));
                     should_notify = true;
                 }
@@ -503,9 +499,11 @@ restart:
 #endif
                 pkt_queue->push(pkt);
                 
+                if ( cur_seek_time != -1 ) cur_seek_time = -1;
+                
                 if ( pkt->pts != AV_NOPTS_VALUE ) {
                     int64_t pts_ms = av_rescale_q(pkt->pts, time_base, (AVRational){ 1, 1000 });
-                    last_pkt_pts_or_end_time_ms = pts_ms;
+                    playable_duration_ms = pts_ms;
                     onEvent(new PlayableDurationChangeEventMessage(pts_ms));
                 }
                 should_notify = true;
@@ -856,7 +854,7 @@ void AudioPlayer::onPrepare() {
 }
 
 void AudioPlayer::onEvaluate() {
-    if ( flags.is_playing || flags.is_render_eof || !flags.play_when_ready || flags.has_error || flags.release_invoked ) {
+    if ( flags.is_playing || flags.is_playback_ended || !flags.play_when_ready || flags.has_error || flags.release_invoked ) {
         return;
     }
     
@@ -867,14 +865,6 @@ void AudioPlayer::onEvaluate() {
         OH_AudioStream_Result ret = audio_renderer->play();
         flags.is_playing = ret == AUDIOSTREAM_SUCCESS;
     }
-}
-
-void AudioPlayer::onRenderEnd() {
-    onPause(PlayWhenReadyChangeReason::RENDER_END);
- 
-#ifdef DEBUG
-    client_print_message("AAAA: playback ended");
-#endif
 }
 
 void AudioPlayer::onPlay(PlayWhenReadyChangeReason reason) {
@@ -937,10 +927,15 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* audi
         return AUDIO_DATA_CALLBACK_RESULT_INVALID;
     }
     
-    if ( flags.is_render_eof ) {
-        last_render_pts_ms = duration_ms;
-        onEvent(new CurrentTimeEventMessage(last_render_pts_ms));
-        onRenderEnd();
+    // playback ended
+    if ( flags.is_render_eof && !flags.is_playback_ended ) {
+        flags.is_playback_ended = true;
+        current_time_ms = duration_ms;
+        onEvent(new CurrentTimeEventMessage(current_time_ms));
+        onPause(PlayWhenReadyChangeReason::PLAYBACK_ENDED);
+#ifdef DEBUG
+    client_print_message("AAAA: playback ended");
+#endif
         return AUDIO_DATA_CALLBACK_RESULT_INVALID;
     }
     
@@ -953,7 +948,7 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* audi
             return AUDIO_DATA_CALLBACK_RESULT_INVALID;
         }
         int64_t pts_ms = av_rescale_q(pts, (AVRational){ 1, out_sample_rate }, (AVRational){ 1, 1000 });
-        last_render_pts_ms = pts_ms;
+        current_time_ms = pts_ms;
         onEvent(new CurrentTimeEventMessage(pts_ms));
         
         if ( flags.is_dec_eof ) {

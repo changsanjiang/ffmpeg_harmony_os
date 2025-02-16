@@ -128,7 +128,7 @@ ohpm i @sj/ffmpeg
   - `volume`: 设置音量, 取值范围 \[0-1\];
   - `speed`: 设置播放速度, 取值范围 \[0.25, 4.0\];
 - 状态监听
-  - `playWhenReadyChange`: playWhenReady 改变时回调; 触发回调可能有以下几个场景:
+  - `playWhenReadyChange`: playWhenReady 改变时回调; 触发改变的原因可能有以下几个场景:
     - 主动调用 play 或 pause;
     - 音频流失去焦点或恢复焦点时;
     - 耳机插拔;
