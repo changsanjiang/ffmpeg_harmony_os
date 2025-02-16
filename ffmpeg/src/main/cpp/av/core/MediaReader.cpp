@@ -78,7 +78,7 @@ AVStream* _Nullable MediaReader::getBestStream(AVMediaType type) {
 
 int MediaReader::findBestStream(AVMediaType type) {
     if ( fmt_ctx == nullptr ) {
-        return AVERROR_INVALIDDATA;
+        throw std::runtime_error("AVFormatContext is not initialized");
     }
 
     return av_find_best_stream(fmt_ctx, type, -1, -1, nullptr, 0);
@@ -86,7 +86,7 @@ int MediaReader::findBestStream(AVMediaType type) {
 
 int MediaReader::readPacket(AVPacket* _Nonnull pkt) {
     if ( fmt_ctx == nullptr ) {
-        return AVERROR_INVALIDDATA;
+        throw std::runtime_error("AVFormatContext is not initialized");
     }
 
     std::lock_guard<std::mutex> lock(interruption_mutex);        // 读取前锁定
@@ -95,23 +95,25 @@ int MediaReader::readPacket(AVPacket* _Nonnull pkt) {
 
 int MediaReader::seek(int64_t timestamp, int stream_index, int flags) {
     if ( fmt_ctx == nullptr ) {
-        return AVERROR_INVALIDDATA;
+        throw std::runtime_error("AVFormatContext is not initialized");
     }
     
-    std::lock_guard<std::mutex> lock(interruption_mutex);        
-    return av_seek_frame(fmt_ctx, stream_index, timestamp, flags);
+    std::lock_guard<std::mutex> lock(interruption_mutex);    
+    return av_seek_frame(fmt_ctx, -1, timestamp, AVSEEK_FLAG_BACKWARD);
 }
 
 void MediaReader::interrupt() {
-    interrupt_requested.store(true);
-    std::lock_guard<std::mutex> lock(interruption_mutex);        // 等待读取中断        
-    interrupt_requested.store(false);
+    if ( fmt_ctx ) {
+        interrupt_requested.store(true);
+        std::lock_guard<std::mutex> lock(interruption_mutex);        // 等待读取中断        
+        interrupt_requested.store(false);
+    }
 }
 
 void MediaReader::release() {
-    interrupt();
-
     if ( fmt_ctx != nullptr ) {
+        interrupt();
+
         avformat_close_input(&fmt_ctx);
     }
 }

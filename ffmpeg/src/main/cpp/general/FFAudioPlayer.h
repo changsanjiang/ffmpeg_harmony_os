@@ -23,6 +23,7 @@
 #ifndef FFMPEG_HARMONY_OS_FFAUDIOPLAYER_H
 #define FFMPEG_HARMONY_OS_FFAUDIOPLAYER_H
 
+#include "av/audio/PlayWhenReadyChangeReason.h"
 #include "napi/native_api.h"
 #include <stdint.h>
 #include <string>
@@ -91,7 +92,7 @@ private:
     void setSpeed(float speed);
 
     void onPlayerEvent(const FFAV::EventMessage* msg);
-    void onPlayWhenReadyChange(bool play_when_ready);
+    void onPlayWhenReadyChange(bool play_when_ready, PlayWhenReadyChangeReason reason);
     void onDurationChange(int64_t duration_ms);
     void onCurrentTimeChange(int64_t current_time_ms);
     void onPlayableDurationChange(int64_t playable_duration_ms);

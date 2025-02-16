@@ -3,35 +3,51 @@ import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { FileMgr } from '@sj/filemgr';
 import { MCLogModule, MCMediaCache } from '@sj/mediacache';
+import { router } from '@kit.ArkUI';
 
 @Entry
 @Component
 struct Index {
-  @State message: string = '请点击';
-  @State show: boolean = false
+  @State message: string = 'FFmpeg 命令 Demo';
 
   private mp4Path = getContext(this).filesDir + '/input.mp4';
   private gifPath = getContext(this).filesDir + '/loading.gif';
 
   build() {
     RelativeContainer() {
-      Text(this.message)
-        .id('HelloWorld')
-        .fontSize(20)
-        .fontWeight(FontWeight.Bold)
-        .alignRules({
-          center: { anchor: '__container__', align: VerticalAlign.Center },
-          middle: { anchor: '__container__', align: HorizontalAlign.Center }
-        })
-        .onClick(() => {
-          console.info("onClick");
-          // this.test1();
-          // this.test2();
-          // this.test3();
-          // this.test4();
-          // this.test5();
-          this.test6();
-        })
+      Column({ space: 20 }) {
+        Text(this.message)
+          .id('FFmpeg 命令 Demo')
+          .fontSize(20)
+          .fontWeight(FontWeight.Bold)
+          .onClick(() => {
+            console.info("onClick");
+            // this.test1();
+            // this.test2();
+            // this.test3();
+            // this.test4();
+            // this.test5();
+            this.test6();
+          })
+
+        Text('FFAudioPlayer Demo')
+          .id('音乐播放器 Demo')
+          .fontSize(20)
+          .fontWeight(FontWeight.Bold)
+          .onClick(() => {
+            console.info("onClick");
+
+            router.pushUrl({ url: 'pages/AudioPlayerDemo' }).then(() => {
+              console.info('Succeeded in jumping to the second page.')
+            }).catch((err: BusinessError) => {
+              console.error(`Failed to jump to the second page. Code is ${err.code}, message is ${err.message}`)
+            })
+          })
+      }
+      .alignRules({
+        center: { anchor: '__container__', align: VerticalAlign.Center },
+        middle: { anchor: '__container__', align: HorizontalAlign.Center }
+      })
     }
     .height('100%')
     .width('100%')
@@ -147,6 +163,7 @@ struct Index {
     });
   }
 
+  // 测试 ffprobe
   test5() {
     let commands = ["ffprobe", "-v", "info", "-of", "json", "-show_entries", "stream=sample_rate,bit_rate,duration", "-i", this.mp4Path];
     let output = "";
@@ -164,6 +181,7 @@ struct Index {
     });
   }
 
+  // 测试 h265 编码
   test6() {
     // let commands = ["ffmpeg", "--help"];
     // let commands = ["ffprobe", "--help"];

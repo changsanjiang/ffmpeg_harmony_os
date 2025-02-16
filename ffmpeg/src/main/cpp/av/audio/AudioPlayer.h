@@ -75,13 +75,14 @@ private:
     AVRational time_base;
     
     int64_t duration_ms = 0;
-    int64_t last_render_pts_ms = 0;
-    int64_t last_pkt_pts_or_end_time_ms = 0;
+    int64_t current_time_ms = 0; // last_render_pts_ms
+    int64_t playable_duration_ms = 0; // last_pkt_pts_or_end_time_ms
     
     float volume = 1;
     float speed = 1;
 
-    int64_t seek_time_ms;
+    int64_t seek_time; // in baseq
+    int64_t cur_seek_time { -1 }; // in baseq
     
     int audio_stream_index;
     int pkt_size_threshold = 5 * 1024 * 1024; // bytes; 5M;
@@ -112,6 +113,7 @@ private:
         unsigned is_read_eof :1;
         unsigned is_dec_eof :1;
         unsigned is_render_eof :1;
+        unsigned is_playback_ended :1;
         
         unsigned is_playing :1;
     } flags = { 0 };
@@ -151,7 +153,6 @@ private:
     void onError(std::shared_ptr<Error> error, std::unique_lock<std::mutex>& lock);
     void onPrepare();
     void onEvaluate();
-    void onRenderEnd();
     
     void onPlay(PlayWhenReadyChangeReason reason);
     void onPause(PlayWhenReadyChangeReason reason, bool should_invoke_pause = true);
