@@ -114,6 +114,7 @@ ohpm i @sj/ffmpeg
   ```
 - Seek 跳转到指定时间播放, 单位毫秒:
   ```typescript
+  // 注意处于准备阶段时执行 Seek 无效:
   audioPlayer.seek(time_ms);
   ```
 - 属性
