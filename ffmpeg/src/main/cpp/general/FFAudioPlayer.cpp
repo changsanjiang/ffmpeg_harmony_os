@@ -672,8 +672,10 @@ void FFAudioPlayer::onPlayableDurationChange(int64_t playable_duration_ms) {
 }
 
 void FFAudioPlayer::onErrorChange(FFAV::Error* error) {
+#ifdef DEBUG
     client_print_message3("AAAA: FFAudioPlayer::onErrorChange(%ld, %s)", error->code, error->msg.c_str());
-
+#endif
+    
     FFAV::Error* c_e = cur_error.load();
     if ( c_e ) {
         delete c_e;
