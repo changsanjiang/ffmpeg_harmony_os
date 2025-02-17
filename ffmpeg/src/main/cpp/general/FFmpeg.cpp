@@ -23,6 +23,7 @@
 #include "FFmpeg.h"
 #include <cstdint>
 #include "FFAbortController.h"
+#include "extension/client_print.h"
 #include "extension/ff_ctx.h"
 
 EXTERN_C_START
@@ -123,7 +124,6 @@ napi_value FFmpeg::Execute(napi_env env, napi_callback_info info) {
     napi_threadsafe_function progress_callback_ref = nullptr;
     napi_threadsafe_function output_callback_ref = nullptr;
     napi_ref abort_signal_ref = nullptr;
-    FFAbortSignal* abort_signal = nullptr;
 
     napi_value opts = args[opts_index];
     napi_value opt_value;
@@ -160,24 +160,19 @@ napi_value FFmpeg::Execute(napi_env env, napi_callback_info info) {
     napi_typeof(env, opt_value, &opt_valuetype);
     if ( opt_valuetype == napi_object ) {
         napi_create_reference(env, opt_value, 1, &abort_signal_ref);
-        napi_unwrap(env, opt_value, reinterpret_cast<void**>(&abort_signal));
     }
     
     FFmpegContext* ctx = new FFmpegContext();
     ctx->cmds = cmds;
     ctx->cmds_count = cmds_count;
     ctx->is_ffmpeg = is_ffmpeg;
+    ctx->is_running = true;
     ctx->log_callback_ref = log_callback_ref;
     ctx->progress_callback_ref = progress_callback_ref;
     ctx->output_callback_ref = output_callback_ref;
     ctx->abort_signal_ref = abort_signal_ref;
     ctx->deferred = deferred;
-    
-    if ( abort_signal ) {
-        abort_signal->setAbortedCallback([&](napi_ref reason_ref) {
-            atomic_store(&ctx->is_running, false);
-        });
-    }
+    ctx->ff_ret = 0;
     
     napi_value async_resource_name;
     napi_create_string_utf8(env, "ffmpeg", NAPI_AUTO_LENGTH, &async_resource_name);
@@ -191,12 +186,24 @@ napi_value FFmpeg::Execute(napi_env env, napi_callback_info info) {
 void FFmpeg::AsyncExecuteCallback(napi_env env, void *data) {
     FFmpegContext* ctx = reinterpret_cast<FFmpegContext *>(data);
     if ( atomic_load(&ctx->is_running) ) {
+        FFAbortSignal* signal = nullptr;
+        if ( ctx->abort_signal_ref ) {
+            napi_value abort_signal;
+            napi_get_reference_value(env, ctx->abort_signal_ref, &abort_signal);
+            napi_unwrap(env, abort_signal, reinterpret_cast<void**>(&signal));
+            signal->setAbortedCallback([&](napi_ref reason_ref) {
+                atomic_store(&ctx->is_running, false);
+            });
+        }
+        
         // init
         ff_ctx_init(ctx->log_callback_ref, ctx->progress_callback_ref, ctx->output_callback_ref);
         
         // execute cmds
         ctx->ff_ret = ctx->is_ffmpeg ? ffmpeg_main(&ctx->is_running, ctx->cmds_count, ctx->cmds) : 
                                        ffporbe_main(&ctx->is_running, ctx->cmds_count, ctx->cmds);
+        
+        signal->setAbortedCallback(nullptr);
     }
 
     // clear partial res
