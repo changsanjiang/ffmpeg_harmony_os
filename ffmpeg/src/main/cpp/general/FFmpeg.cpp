@@ -203,7 +203,7 @@ void FFmpeg::AsyncExecuteCallback(napi_env env, void *data) {
         ctx->ff_ret = ctx->is_ffmpeg ? ffmpeg_main(&ctx->is_running, ctx->cmds_count, ctx->cmds) : 
                                        ffporbe_main(&ctx->is_running, ctx->cmds_count, ctx->cmds);
         
-        signal->setAbortedCallback(nullptr);
+        if ( signal ) signal->setAbortedCallback(nullptr);
     }
 
     // clear partial res
