@@ -86,7 +86,7 @@ private:
     
     int audio_stream_index;
     int pkt_size_threshold = 5 * 1024 * 1024; // bytes; 5M;
-    int frame_threshold; // pcm samples; >= 1s;
+    int frame_threshold; // pcm samples; >= 5s;
     int out_sample_rate;
     int out_nb_channels;
     int out_bytes_per_sample;

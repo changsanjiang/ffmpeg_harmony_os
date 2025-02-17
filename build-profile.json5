@@ -5,13 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "/Users/changsanjiang/.ohos/config/default_ffmpeg_harmony_os_UlQP2uHEQcCfSyM5a0rUiN2wylccGQQE9J-ZEDA82m8=.cer",
-          "storePassword": "0000001B704C2E50971216519B3C9252AC891A255486BC3179585B2DB9F8DBA928C7DA50ACC82E4189574C",
+          "certpath": "/Users/db/.ohos/config/default_ffmpeg_harmony_os_tbfeweN9BKyFkfCbfnSx7VeJ_KU4gRR9joX1g-D_mIA=.cer",
+          "storePassword": "0000001B912CB36527F7DC416B636941E16470734E08C230A53806239AD054E294F1E948A2172090AEACAE",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001B044650E87FF95775D19556569926BEFDC8042CF6907518B18DA17B2FC1EE462C6E574B0C734D80",
-          "profile": "/Users/changsanjiang/.ohos/config/default_ffmpeg_harmony_os_UlQP2uHEQcCfSyM5a0rUiN2wylccGQQE9J-ZEDA82m8=.p7b",
+          "keyPassword": "0000001B59C2ACCBA6A2C2E60B688CD66F345F40346E2BFFA8A23EEB08D3F7C94DB091705EAE3613B0C171",
+          "profile": "/Users/db/.ohos/config/default_ffmpeg_harmony_os_tbfeweN9BKyFkfCbfnSx7VeJ_KU4gRR9joX1g-D_mIA=.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "/Users/changsanjiang/.ohos/config/default_ffmpeg_harmony_os_UlQP2uHEQcCfSyM5a0rUiN2wylccGQQE9J-ZEDA82m8=.p12"
+          "storeFile": "/Users/db/.ohos/config/default_ffmpeg_harmony_os_tbfeweN9BKyFkfCbfnSx7VeJ_KU4gRR9joX1g-D_mIA=.p12"
         }
       }
     ],

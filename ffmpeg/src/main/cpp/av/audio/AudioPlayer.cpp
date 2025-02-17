@@ -323,7 +323,7 @@ void AudioPlayer::InitThread() {
         goto exit_thread;
     }
     
-    frame_threshold = std::max(av_rescale_q(1000, (AVRational){ 1, 1000 }, (AVRational) { 1, out_sample_rate }), nb_render_frame_samples * 5);
+    frame_threshold = std::max(av_rescale_q(5000, (AVRational){ 1, 1000 }, (AVRational) { 1, out_sample_rate }), nb_render_frame_samples * 5);
     
 //    flags.wants_seek = true;
 //    seek_time_ms = 5000;
@@ -854,16 +854,23 @@ void AudioPlayer::onPrepare() {
 }
 
 void AudioPlayer::onEvaluate() {
-    if ( flags.is_playing || flags.is_playback_ended || !flags.play_when_ready || flags.has_error || flags.release_invoked ) {
+    if ( flags.is_playback_ended || !flags.play_when_ready || flags.has_error || flags.release_invoked ) {
         return;
     }
     
-    int64_t buf_duration_ms = av_rescale_q(audio_fifo->getSize(), (AVRational) { 1, out_sample_rate }, (AVRational) { 1, 1000 });
-    bool should_play = buf_duration_ms >= 500 || flags.is_dec_eof;
+    bool should_play = audio_fifo->getSize() >= (frame_threshold > 1) || flags.is_dec_eof;
     
     if ( should_play ) {
-        OH_AudioStream_Result ret = audio_renderer->play();
-        flags.is_playing = ret == AUDIOSTREAM_SUCCESS;
+        if ( !flags.is_playing ) {
+            OH_AudioStream_Result ret = audio_renderer->play();
+            if ( ret == AUDIOSTREAM_SUCCESS ) flags.is_playing = true;
+        }
+    }
+    else {
+        if ( flags.is_playing ) {
+            OH_AudioStream_Result ret = audio_renderer->pause();
+            if ( ret == AUDIOSTREAM_SUCCESS ) flags.is_playing = false;
+        }
     }
 }
 

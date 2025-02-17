@@ -111,6 +111,7 @@ struct Index {
         this.message = "已完成:" + outputPath;
         console.info(`Execution succeeded with outputPath: ${outputPath}`);
       }).catch((error: Error) => {
+        this.message = `Execution failed with error: ${error.message}`;
         console.error(`Execution failed with error: ${error.message}`);
       });
 
@@ -137,6 +138,7 @@ struct Index {
       this.message = "已完成:" + outputPath;
       console.info(`Execution succeeded with outputPath: ${outputPath}`);
     }).catch((error: Error) => {
+      this.message = `Execution failed with error: ${error.message}`;
       console.error(`Execution failed with error: ${error.message}`);
     });
   }
@@ -159,6 +161,7 @@ struct Index {
       this.message = "已完成:" + outputPath;
       console.info(`Execution succeeded with outputPath: ${outputPath}`);
     }).catch((error: Error) => {
+      this.message = `Execution failed with error: ${error.message}`;
       console.error(`Execution failed with error: ${error.message}`);
     });
   }
@@ -177,6 +180,7 @@ struct Index {
       console.info(`Execution succeeded with output: ${output}`);
       this.message = output;
     }).catch((error: Error) => {
+      this.message = `Execution failed with error: ${error.message}`;
       console.error(`Execution failed with error: ${error.message}`);
     });
   }
@@ -202,6 +206,7 @@ struct Index {
       this.message = `Execution succeeded with outputPath: ${outputPath}`;
       console.info(this.message);
     }).catch((error: Error) => {
+      this.message = `Execution failed with error: ${error.message}`;
       console.error(`Execution failed with error: ${error.message}`);
     });
   }
