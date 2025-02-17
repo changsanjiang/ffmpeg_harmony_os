@@ -154,12 +154,8 @@ napi_value FFAbortSignal::AddEventListener(napi_env env, napi_callback_info info
 
 void FFAbortSignal::setAbortedCallback(FFAbortSignal::AbortedCallback callback) {
     std::unique_lock<std::mutex> lock(mtx);
-    if ( aborted ) {
-        callback(reason_ref);
-    }
-    else {
-        aborted_callback = callback;
-    }
+    aborted_callback = callback;
+    if ( aborted && callback ) callback(reason_ref);
 }
 
 void FFAbortSignal::InvokeCallback(napi_env env, napi_value js_callback, void* context, void* data) {
