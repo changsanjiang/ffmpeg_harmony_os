@@ -38,7 +38,7 @@ const OH_AudioStream_SampleFormat OUTPUT_RENDER_SAMPLE_FORMAT = AUDIOSTREAM_SAMP
 const char* FILTER_BUFFER_SRC_NAME = "0:a";
 const char* FILTER_BUFFER_SINK_NAME = "outa";
 
-AudioPlayer::AudioPlayer(const std::string& url): url(url) {
+AudioPlayer::AudioPlayer(const std::string& url, int64_t start_time_position_ms): url(url), start_time_position_ms(start_time_position_ms) {
     
 }
 
@@ -293,8 +293,10 @@ void AudioPlayer::InitThread() {
     maximum_frame_threshold = std::max(av_rescale_q(5000, (AVRational){ 1, 1000 }, (AVRational) { 1, out_sample_rate }), nb_render_frame_samples * 5);
     minimum_frame_threshold = std::max(av_rescale_q(3000, (AVRational){ 1, 1000 }, (AVRational) { 1, out_sample_rate }), nb_render_frame_samples * 5);
     
-//    flags.wants_seek = true;
-//    seek_time_ms = 5000;
+    if ( start_time_position_ms > 0 ) {
+        flags.wants_seek = true;
+        seek_time = av_rescale_q(std::min(start_time_position_ms, duration_ms), (AVRational){ 1, 1000 }, AV_TIME_BASE_Q);
+    }
     
     // start read & dec threads
     read_thread = std::make_unique<std::thread>(&AudioPlayer::ReadThread, this);
