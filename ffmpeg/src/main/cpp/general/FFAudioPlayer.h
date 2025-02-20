@@ -91,7 +91,7 @@ private:
     void setVolume(float volume);
     void setSpeed(float speed);
 
-    void onPlayerEvent(const FFAV::EventMessage* msg);
+    void onPlayerEvent(std::shared_ptr<FFAV::EventMessage> msg);
     void onPlayWhenReadyChange(bool play_when_ready, PlayWhenReadyChangeReason reason);
     void onDurationChange(int64_t duration_ms);
     void onCurrentTimeChange(int64_t current_time_ms);

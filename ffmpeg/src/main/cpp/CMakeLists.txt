@@ -1,6 +1,6 @@
 # the minimum version of CMake.
 cmake_minimum_required(VERSION 3.5.0)
-project(myNpmLib)
+project(ffmpeg)
 
 set(NATIVERENDER_ROOT_PATH ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -8,17 +8,20 @@ if(DEFINED PACKAGE_FIND_FILE)
     include(${PACKAGE_FIND_FILE})
 endif()
 
-include_directories(${NATIVERENDER_ROOT_PATH}
-                    ${NATIVERENDER_ROOT_PATH}/include)
+if(OHOS_ARCH STREQUAL "arm64-v8a")
+    add_definitions(-DFF_ARCH_ARM64_V8a)
+elseif(OHOS_ARCH STREQUAL "x86_64")
+    add_definitions(-DFF_ARCH_X86_64)
+endif()
 
-# 自动查找 src 目录下所有 .cpp 文件
-file(GLOB SOURCES "napi_init.cpp" "fftools/*.c" "extension/*.c" "extension/*.cpp" "av/*.cpp" "av/**/*.cpp" "general/*.cpp")
+file(GLOB FF_SRC_FILES "napi_init.cpp" "fftools/*.c" "extension/*.c" "extension/*.cpp" "av/*.cpp" "av/**/*.cpp" "general/*.cpp")
+add_library(ffmpeg SHARED ${FF_SRC_FILES})
+target_include_directories(ffmpeg PRIVATE
+    ${NATIVERENDER_ROOT_PATH}
+)
 
-# 自动查找 include 目录下所有 .h 文件
-file(GLOB HEADERS "fftools/*.h" "extension/*.h" "av/**/*.h" "general/*.h")
-
-add_library(ffmpeg SHARED ${SOURCES} ${HEADERS})
-target_link_libraries(ffmpeg PUBLIC libace_napi.z.so)
+# napi
+target_link_libraries(ffmpeg PRIVATE libace_napi.z.so)
 
 #修改文件CMakeLists.txt
 #因为此三方库中存在汇编编译的部分，所以需要修改CFLAGS参考如下，符号不可抢占且优先使用本地符号
@@ -49,6 +52,7 @@ target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libv
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/openssl_3_4_0/${OHOS_ARCH}/lib/libcrypto.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/openssl_3_4_0/${OHOS_ARCH}/lib/libssl.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/opus/${OHOS_ARCH}/lib/libopus.a)
+target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/rubberband/${OHOS_ARCH}/lib/librubberband.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/x264/${OHOS_ARCH}/lib/libx264.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/x265/${OHOS_ARCH}/lib/libx265.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/zlib_1_3_1/${OHOS_ARCH}/lib/libz.a)

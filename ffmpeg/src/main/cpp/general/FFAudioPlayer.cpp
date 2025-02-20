@@ -604,10 +604,10 @@ void FFAudioPlayer::setSpeed(float speed) {
     }
 }
 
-void FFAudioPlayer::onPlayerEvent(const FFAV::EventMessage* msg) {
+void FFAudioPlayer::onPlayerEvent(std::shared_ptr<FFAV::EventMessage> msg) {
     switch(msg->type) {
     case FFAV::EventType::MSG_PLAY_WHEN_READY_CHANGE: {
-        const FFAV::PlayWhenReadyChangeEventMessage* change_msg = static_cast<const FFAV::PlayWhenReadyChangeEventMessage*>(msg); 
+        const FFAV::PlayWhenReadyChangeEventMessage* change_msg = static_cast<std::shared_ptr<FFAV::PlayWhenReadyChangeEventMessage>>(msg); 
         onPlayWhenReadyChange(change_msg->play_when_ready, change_msg->reason);
     }
         break;
