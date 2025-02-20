@@ -24,7 +24,6 @@
 #define FFMPEGPROJ_PACKETQUEUE_H
 
 #include <cstdint>
-#include <mutex>
 extern "C" {
 #include <libavcodec/avcodec.h>
 }
@@ -50,7 +49,6 @@ public:
 
 private:
     std::queue<AVPacket*> queue;
-    std::mutex mtx;
     int64_t total_size = 0;
 };
 

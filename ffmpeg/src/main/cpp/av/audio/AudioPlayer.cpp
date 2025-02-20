@@ -98,7 +98,7 @@ void AudioPlayer::onRelease(std::unique_lock<std::mutex>& lock) {
 
     audio_reader->interrupt();
     
-    event_msg_queue.clear();
+    event_msg_queue.stop();
     
     if ( init_thread && init_thread->joinable() ) {
         init_thread->join();
@@ -290,7 +290,8 @@ void AudioPlayer::InitThread() {
         goto exit_thread;
     }
     
-    frame_threshold = std::max(av_rescale_q(5000, (AVRational){ 1, 1000 }, (AVRational) { 1, out_sample_rate }), nb_render_frame_samples * 5);
+    maximum_frame_threshold = std::max(av_rescale_q(5000, (AVRational){ 1, 1000 }, (AVRational) { 1, out_sample_rate }), nb_render_frame_samples * 5);
+    minimum_frame_threshold = std::max(av_rescale_q(3000, (AVRational){ 1, 1000 }, (AVRational) { 1, out_sample_rate }), nb_render_frame_samples * 5);
     
 //    flags.wants_seek = true;
 //    seek_time_ms = 5000;
@@ -527,7 +528,7 @@ void AudioPlayer::DecThread() {
                 }
                 
                 // frame buf 是否还可以继续填充
-                if ( audio_fifo->getSize() < frame_threshold ) {
+                if ( audio_fifo->getSize() < maximum_frame_threshold ) {
                     // 判断是否有可解码的 pkt 或 read eof;
                     return pkt_queue->getCount() > 0 || flags.is_read_eof;
                 }
@@ -789,15 +790,15 @@ void AudioPlayer::onEvaluate() {
         return;
     }
     
-    bool should_play = audio_fifo->getSize() >= (frame_threshold > 1) || flags.is_dec_eof;
+    flags.is_playback_likely_to_keep_up = audio_fifo->getSize() >= minimum_frame_threshold;
     
-    if ( should_play ) {
+    if ( flags.is_playback_likely_to_keep_up || flags.is_dec_eof ) {
         if ( !flags.is_playing ) {
             OH_AudioStream_Result ret = audio_renderer->play();
             if ( ret == AUDIOSTREAM_SUCCESS ) flags.is_playing = true;
         }
     }
-    else {
+    else if ( audio_fifo->getSize() < render_frame_size ) {
         if ( flags.is_playing ) {
             OH_AudioStream_Result ret = audio_renderer->pause();
             if ( ret == AUDIOSTREAM_SUCCESS ) flags.is_playing = false;

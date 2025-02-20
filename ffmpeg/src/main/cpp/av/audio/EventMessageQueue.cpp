@@ -13,16 +13,13 @@ EventMessageQueue::EventMessageQueue() = default;
 EventMessageQueue::~EventMessageQueue() {
     // 这里上锁，确保线程安全
     std::unique_lock<std::mutex> lock(mtx);
-    if ( is_running && msg_thread && msg_thread->joinable() ) {
-        is_running = false;
-        // 提前解锁通知等待的工作线程该退出了
-        lock.unlock();
-        msg_cv.notify_one();
-        
-        // 等待线程退出
-        if ( msg_thread->joinable() ) {
-            msg_thread->join();
-        }
+    is_running = false;
+    // 提前解锁通知等待的工作线程该退出了
+    lock.unlock();
+    msg_cv.notify_one();
+    
+    if ( msg_thread && msg_thread->joinable() ) {
+        msg_thread->join();
     }
 }
 
@@ -52,14 +49,20 @@ void EventMessageQueue::push(std::shared_ptr<EventMessage> msg) {
     }
 }
 
-void EventMessageQueue::clear() {
+void EventMessageQueue::stop() {
     std::unique_lock<std::mutex> lock(mtx);  
     if ( !is_running ) {
         return;
     }
+    
+    is_running = false;
+    
     while (!msg_queue.empty()) {
         msg_queue.pop();
     }
+    
+    lock.unlock();
+    msg_cv.notify_one();
 }
 
 void EventMessageQueue::ProcessQueue() {

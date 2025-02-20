@@ -29,7 +29,6 @@ AudioFifo::AudioFifo() = default;
 AudioFifo::~AudioFifo() { release(); }
 
 int AudioFifo::init(AVSampleFormat sample_fmt, int nb_channels, int nb_samples) {
-    std::lock_guard<std::mutex> lock(mtx);
     if ( fifo != nullptr ) {
         throw std::runtime_error("AudioFifo is already initialized");
     }
@@ -42,7 +41,6 @@ int AudioFifo::init(AVSampleFormat sample_fmt, int nb_channels, int nb_samples) 
 }
 
 int AudioFifo::write(void** data, int nb_samples, int64_t pts) {
-    std::lock_guard<std::mutex> lock(mtx);
     if ( fifo == nullptr ) {
         throw std::runtime_error("AVAudioFifo is not initialized");
     }
@@ -53,7 +51,6 @@ int AudioFifo::write(void** data, int nb_samples, int64_t pts) {
 }
 
 int AudioFifo::read(void** data, int nb_samples, int64_t* pts_ptr) {
-    std::lock_guard<std::mutex> lock(mtx);
     if ( fifo == nullptr ) {
         throw std::runtime_error("AVAudioFifo is not initialized");
     }
@@ -68,7 +65,6 @@ int AudioFifo::read(void** data, int nb_samples, int64_t* pts_ptr) {
 }
 
 void AudioFifo::clear() {
-    std::lock_guard<std::mutex> lock(mtx);
     if ( fifo != nullptr ) {
         next_pts = AV_NOPTS_VALUE;
         av_audio_fifo_reset(fifo);
@@ -76,12 +72,10 @@ void AudioFifo::clear() {
 }
 
 int AudioFifo::getSize() {
-    std::lock_guard<std::mutex> lock(mtx);
     return fifo != nullptr ? av_audio_fifo_size(fifo) : 0;
 }
 
 void AudioFifo::release() {
-    std::lock_guard<std::mutex> lock(mtx);
     if ( fifo != nullptr ) {
         av_audio_fifo_free(fifo);
         fifo = nullptr;
