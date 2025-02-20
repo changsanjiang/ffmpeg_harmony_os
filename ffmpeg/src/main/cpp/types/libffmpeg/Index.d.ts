@@ -79,12 +79,18 @@ export enum FFPlayWhenReadyChangeReason {
   PLAYBACK_ENDED,
 }
 
+export interface FFAudioPlaybackOptions {
+  readonly startTimePosition?: number;  // 毫秒, 非负数, 表示从音频的某个时间点开始播放
+}
+
 export class FFAudioPlayer {
   constructor();
 
   public get url(): string | undefined;
 
   public set url(newUrl: string | undefined);
+
+  public setUrl(newUrl?: string, options?: FFAudioPlaybackOptions);
 
   /** [0.0, 1.0]; */
   public get volume(): number;

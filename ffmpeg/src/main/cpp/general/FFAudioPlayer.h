@@ -37,6 +37,8 @@ public:
     static void Destructor(napi_env env, void* nativeObject, void* finalize_hint);
 
 private:
+//struct FFAudioPlaybackOptions;
+    
     static napi_value New(napi_env env, napi_callback_info info);
     static napi_value GetUrl(napi_env env, napi_callback_info info);
     static napi_value SetUrl(napi_env env, napi_callback_info info);
@@ -64,6 +66,8 @@ private:
     ~FFAudioPlayer();
     
     std::string url;
+    // FFAudioPlaybackOptions* opts = nullptr;
+    int64_t start_time_position_ms { 0 };
     FFAV::AudioPlayer* player = nullptr;
     std::atomic<int64_t> current_time_ms { 0 };
     std::atomic<int64_t> duration_ms { 0 };

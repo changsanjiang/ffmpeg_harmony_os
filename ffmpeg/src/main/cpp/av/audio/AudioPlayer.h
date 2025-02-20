@@ -41,7 +41,7 @@ namespace FFAV {
 
 class AudioPlayer {
 public:
-    AudioPlayer(const std::string& url);
+    AudioPlayer(const std::string& url, int64_t start_time_position_ms);
     ~AudioPlayer();
 
     void prepare();
@@ -58,6 +58,7 @@ public:
     
 private:
     const std::string url = nullptr;
+    const int64_t start_time_position_ms;
     MediaReader* audio_reader = nullptr;
     MediaDecoder* audio_decoder = nullptr;
     FilterGraph* filter_graph = nullptr;
