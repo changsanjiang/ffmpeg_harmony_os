@@ -23,7 +23,7 @@ public:
     using EventCallback = std::function<void(std::shared_ptr<EventMessage> msg)>;
     void setEventCallback(EventCallback callback);
     void push(std::shared_ptr<EventMessage> msg);
-    void clear();
+    void stop();
 
 private:
     EventCallback event_callback;

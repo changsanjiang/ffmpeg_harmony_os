@@ -23,7 +23,6 @@
 #ifndef FFMPEGPROJ_AUDIOFIFO_H
 #define FFMPEGPROJ_AUDIOFIFO_H
 
-#include <mutex>
 extern "C" {
 #include "libavcodec/avcodec.h"
 #include "libavutil/audio_fifo.h"
@@ -48,7 +47,6 @@ public:
     int getSize();  
 
 private:
-    std::mutex mtx;
     AVAudioFifo* fifo = nullptr;        
     int64_t next_pts = AV_NOPTS_VALUE; // in time_base
     void release();

@@ -31,7 +31,6 @@ PacketQueue::~PacketQueue() {
 }
 
 void PacketQueue::push(AVPacket* _Nonnull packet) {
-    std::lock_guard<std::mutex> lock(mtx);
     AVPacket* pkt = av_packet_alloc();
     av_packet_ref(pkt, packet);
     
@@ -40,7 +39,6 @@ void PacketQueue::push(AVPacket* _Nonnull packet) {
 }
 
 bool PacketQueue::pop(AVPacket* _Nonnull packet) {
-    std::lock_guard<std::mutex> lock(mtx);
     if ( queue.empty() ) {
         return false;
     }
@@ -55,7 +53,6 @@ bool PacketQueue::pop(AVPacket* _Nonnull packet) {
 }
 
 void PacketQueue::clear() {
-    std::lock_guard<std::mutex> lock(mtx);
     while(!queue.empty()) {
         AVPacket* pkt = queue.front();
         queue.pop();
@@ -65,12 +62,10 @@ void PacketQueue::clear() {
 }
 
 size_t PacketQueue::getCount() {
-    std::lock_guard<std::mutex> lock(mtx);
     return queue.size();
 }
 
 int64_t PacketQueue::getSize() {
-    std::lock_guard<std::mutex> lock(mtx);
     return total_size;
 }
 
