@@ -111,6 +111,7 @@
 #include "ffmpeg.h"
 #include "cmdutils.h"
 #include "sync_queue.h"
+#include "fftools_common.h"
 
 #include "libavutil/avassert.h"
 

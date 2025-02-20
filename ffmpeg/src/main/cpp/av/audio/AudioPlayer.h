@@ -25,6 +25,7 @@
 
 #include "EventMessage.h"
 #include "Error.h"
+#include "av/audio/EventMessageQueue.h"
 #include "av/core/MediaReader.h"
 #include "av/core/MediaDecoder.h"
 #include "av/core/FilterGraph.h"
@@ -53,8 +54,7 @@ public:
     // [0.25, 4.0]
     void setSpeed(float speed);
     
-    using EventCallback = std::function<void(const EventMessage* msg)>;
-    void setEventCallback(EventCallback callback);
+    void setEventCallback(EventMessageQueue::EventCallback callback);
     
 private:
     const std::string url = nullptr;
@@ -95,10 +95,7 @@ private:
     std::string out_ch_layout_desc;
     PlayWhenReadyChangeReason play_when_ready_change_reason = USER_REQUEST;
     std::shared_ptr<Error> cur_error = nullptr;
-
-    EventCallback event_callback = nullptr;
-    std::unique_ptr<std::thread> event_msg_thread = nullptr;
-    std::queue<EventMessage*> event_msg_queue;
+    EventMessageQueue event_msg_queue {};
     
     struct {
         unsigned play_when_ready :1;
@@ -157,7 +154,7 @@ private:
     void onPlay(PlayWhenReadyChangeReason reason);
     void onPause(PlayWhenReadyChangeReason reason, bool should_invoke_pause = true);
     
-    void onEvent(EventMessage* msg);
+    void onEvent(std::shared_ptr<EventMessage> msg);
     
     OH_AudioData_Callback_Result onRendererWriteDataCallback(void* audio_buffer, int audio_buffer_size_in_bytes);
     void onRendererInterruptEventCallback(OH_AudioInterrupt_ForceType type, OH_AudioInterrupt_Hint hint);
