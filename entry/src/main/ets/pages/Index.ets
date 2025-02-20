@@ -27,7 +27,8 @@ struct Index {
             // this.test3();
             // this.test4();
             // this.test5();
-            this.test6();
+            // this.test6();
+            this.test7();
           })
 
         Text('FFAudioPlayer Demo')
@@ -193,6 +194,31 @@ struct Index {
     let inputPath = this.mp4Path; // 输入文件的路径, 可以是本地路径也可以是远程路径;
     let outputPath = cacheDir + `/output_6.mp4`;
     let commands = ["ffmpeg", "-i", inputPath, "-c:a", "copy", "-c:v", "libx265", outputPath, "-y", "-v", "info"];
+
+    console.log(`[Commands] ${commands.join(" ")}`);
+
+    FFmpeg.execute(commands, {
+      logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
+      progressCallback: (message: string) => {
+        this.message = message;
+        console.log(`[progress]${JSON.stringify(FFProgressMessageParser.parse(message))}`);
+      },
+    }).then(() => {
+      this.message = `Execution succeeded with outputPath: ${outputPath}`;
+      console.info(this.message);
+    }).catch((error: Error) => {
+      this.message = `Execution failed with error: ${error.message}`;
+      console.error(`Execution failed with error: ${error.message}`);
+    });
+  }
+
+  // 测试 rubber band 滤镜
+  test7() {
+    let cacheDir = getContext(this).cacheDir;
+    let inputPath = this.mp4Path; // 输入文件的路径, 可以是本地路径也可以是远程路径;
+    let outputPath = cacheDir + `/output_7.wav`;
+    // 将音频的播放速度加快 1.5 倍，同时保持音高不变。
+    let commands = ["ffmpeg", "-i", inputPath, "-filter_complex", "rubberband=tempo=1.5", outputPath, "-y", "-v", "info"];
 
     console.log(`[Commands] ${commands.join(" ")}`);
 
