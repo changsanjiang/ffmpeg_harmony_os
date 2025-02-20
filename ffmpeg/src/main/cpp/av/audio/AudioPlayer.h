@@ -86,7 +86,9 @@ private:
     
     int audio_stream_index;
     int pkt_size_threshold = 5 * 1024 * 1024; // bytes; 5M;
-    int frame_threshold; // pcm samples; >= 5s;
+    int render_frame_size;
+    int maximum_frame_threshold; // pcm samples; 5s;
+    int minimum_frame_threshold; // pcm samples; 3s; 播放器为了维持流畅播放所需的最小缓冲数据量
     int out_sample_rate;
     int out_nb_channels;
     int out_bytes_per_sample;
@@ -111,6 +113,7 @@ private:
         unsigned is_dec_eof :1;
         unsigned is_render_eof :1;
         unsigned is_playback_ended :1;
+        unsigned is_playback_likely_to_keep_up :1;
         
         unsigned is_playing :1;
     } flags = { 0 };
@@ -120,7 +123,6 @@ private:
     void InitThread();
     void ReadThread();
     void DecThread();
-    void EventThread();
     
     int initDecoder(AVCodecParameters* codecpar);
     int initFilterGraph(
