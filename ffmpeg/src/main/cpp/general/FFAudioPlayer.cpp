@@ -31,6 +31,10 @@
 
 namespace FFAV {
 
+//struct FFAudioPlayer::FFAudioPlaybackOptions { 
+//    int64_t start_time_position_ms;
+//};
+
 napi_value FFAudioPlayer::Init(napi_env env, napi_value exports) {
 #ifdef DEBUG
     client_print_message3("AAAA: FFAudioPlayer::Init");
@@ -38,6 +42,7 @@ napi_value FFAudioPlayer::Init(napi_env env, napi_value exports) {
     
     napi_property_descriptor properties[] = {
         { "url", nullptr, nullptr, GetUrl, SetUrl, nullptr, napi_default, nullptr},
+        { "setUrl", nullptr, SetUrl, nullptr, nullptr, nullptr, napi_default, nullptr},
         { "volume", nullptr, nullptr, GetVolume, SetVolume, nullptr, napi_default, nullptr},
         { "speed", nullptr, nullptr, GetSpeed, SetSpeed, nullptr, napi_default, nullptr},
         { "playWhenReady", nullptr, nullptr, GetPlayWhenReady, nullptr, nullptr, napi_default, nullptr},
@@ -135,8 +140,9 @@ napi_value FFAudioPlayer::SetUrl(napi_env env, napi_callback_info info) {
     client_print_message3("AAAA: FFAudioPlayer::SetUrl");
 #endif
 
-    size_t argc = 1;
+    size_t argc = 2;
     int url_idx = 0;
+    int opts_idx = 1;
 
     napi_value args[argc];
     napi_value js_this;
@@ -145,12 +151,18 @@ napi_value FFAudioPlayer::SetUrl(napi_env env, napi_callback_info info) {
 
     FFAudioPlayer* obj;
     napi_unwrap(env, js_this, reinterpret_cast<void**>(&obj));
+    
+    obj->url.clear();
+//    if ( obj->opts ) {
+//        delete obj->opts;
+//        obj->opts = nullptr;
+//    }
+    obj->start_time_position_ms = 0;
 
     napi_valuetype urltype;
     napi_typeof(env, args[url_idx], &urltype);
 
     if ( urltype == napi_null || urltype == napi_undefined ) {
-        obj->url.clear();  
         return nullptr;
     }
 
@@ -164,6 +176,21 @@ napi_value FFAudioPlayer::SetUrl(napi_env env, napi_callback_info info) {
     std::string new_url(url_size, '\0'); 
     napi_get_value_string_utf8(env, args[url_idx], &new_url[0], url_size + 1, &url_size);
     obj->url = std::move(new_url);  
+    
+    napi_value opts = args[opts_idx];
+    napi_valuetype valuetype;
+    napi_typeof(env, opts, &valuetype);
+    if ( valuetype != napi_undefined ) {
+        napi_value opt;
+        napi_get_named_property(env, opts, "startTimePosition", &opt);
+        napi_typeof(env, opts, &valuetype);
+        if ( valuetype != napi_undefined ) {
+            int64_t start_time_position_ms;
+            napi_get_value_int64(env, opt, &start_time_position_ms);
+            //obj->opts = new FFAudioPlaybackOptions { start_time_position_ms };
+            obj->start_time_position_ms = start_time_position_ms;
+        }
+    }
     return nullptr;
 }
 
@@ -523,7 +550,7 @@ FFAudioPlayer::~FFAudioPlayer() {
 
 bool FFAudioPlayer::createPlayer() {
     if ( player == nullptr && !url.empty() ) {
-        player = new FFAV::AudioPlayer(url);
+        player = new FFAV::AudioPlayer(url, start_time_position_ms);
         if ( speed != 1 ) player->setSpeed(speed);
         if ( volume != 1 ) player->setVolume(volume);
         player->setEventCallback(std::bind(&FFAudioPlayer::onPlayerEvent, this, std::placeholders::_1));

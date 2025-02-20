@@ -1,3 +1,7 @@
+#### [v1.1.3] 2025/02
+- 开启`librubberband`, 用于支持`rubberband`滤镜;
+- 音乐播放器新增`startTimePosition`, 用于指定播放初始的位置;
+
 #### [v1.1.2] 2025/02
 - 添加`-fPIC`编译选项;
 - 基于`ffmpeg + AudioRenderer`封装音乐播放器;
