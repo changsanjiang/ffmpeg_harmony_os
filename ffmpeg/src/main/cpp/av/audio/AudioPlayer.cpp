@@ -98,6 +98,8 @@ void AudioPlayer::onRelease(std::unique_lock<std::mutex>& lock) {
 
     audio_reader->interrupt();
     
+    event_msg_queue.clear();
+    
     if ( init_thread && init_thread->joinable() ) {
         init_thread->join();
         init_thread.reset();
@@ -114,12 +116,6 @@ void AudioPlayer::onRelease(std::unique_lock<std::mutex>& lock) {
         dec_thread->join();
         dec_thread.reset();
         dec_thread = nullptr;
-    }
-    
-    if ( event_msg_thread && event_msg_thread->joinable() ) {
-        event_msg_thread->join();
-        event_msg_thread.reset();
-        event_msg_thread = nullptr;
     }
     
     if ( audio_renderer ) {
@@ -145,14 +141,6 @@ void AudioPlayer::onRelease(std::unique_lock<std::mutex>& lock) {
     
     if ( audio_reader ) {
         delete audio_reader;
-    }
-    
-    if ( !event_msg_queue.empty() ) {
-        do {
-            EventMessage* msg = event_msg_queue.front();
-            event_msg_queue.pop();
-            delete msg;
-        } while (!event_msg_queue.empty());
     }
     
 #ifdef DEBUG
@@ -207,29 +195,8 @@ void AudioPlayer::setSpeed(float speed) {
     }
 }
 
-void AudioPlayer::setEventCallback(AudioPlayer::EventCallback callback) {
-    std::unique_lock<std::mutex> lock(mtx);
-    if ( flags.has_error || flags.release_invoked ) {
-        return;
-    }
-    
-    event_callback = callback;
-    
-    if ( event_callback ) {
-        if ( !event_msg_thread ) {
-            event_msg_thread = std::make_unique<std::thread>(&AudioPlayer::EventThread, this);
-        }
-        return;
-    }
-    
-    if ( event_msg_thread && event_msg_thread->joinable() ) {
-        event_msg_thread->detach();
-        event_msg_thread.reset();
-        event_msg_thread = nullptr;
-    }
-    
-    lock.unlock();
-    cv.notify_all();
+void AudioPlayer::setEventCallback(EventMessageQueue::EventCallback callback) {
+    event_msg_queue.setEventCallback(callback);
 }
 
 void AudioPlayer::InitThread() {
@@ -332,7 +299,7 @@ void AudioPlayer::InitThread() {
     read_thread = std::make_unique<std::thread>(&AudioPlayer::ReadThread, this);
     dec_thread =  std::make_unique<std::thread>(&AudioPlayer::DecThread, this);
     
-    onEvent(new DurationChangeEventMessage(duration_ms));
+    onEvent(std::make_shared<DurationChangeEventMessage>(duration_ms));
     
 exit_thread:
     if ( buf_src_params != nullptr ) {
@@ -484,7 +451,8 @@ restart:
                     // read eof
                     flags.is_read_eof = true;
                     playable_duration_ms = duration_ms;
-                    onEvent(new PlayableDurationChangeEventMessage(duration_ms));
+                    
+                    onEvent(std::make_shared<PlayableDurationChangeEventMessage>(duration_ms));
                     should_notify = true;
                 }
                 else {
@@ -504,7 +472,7 @@ restart:
                 if ( pkt->pts != AV_NOPTS_VALUE ) {
                     int64_t pts_ms = av_rescale_q(pkt->pts, time_base, (AVRational){ 1, 1000 });
                     playable_duration_ms = pts_ms;
-                    onEvent(new PlayableDurationChangeEventMessage(pts_ms));
+                    onEvent(std::make_shared<PlayableDurationChangeEventMessage>(pts_ms));
                 }
                 should_notify = true;
             }
@@ -643,43 +611,6 @@ exit_thread:
     
 #ifdef DEBUG
     client_print_message3("AAAA: dec thread exit");
-#endif
-}
-
-void AudioPlayer::EventThread() {
-    EventMessage* event;
-    EventCallback callback;
-    do {
-        event = nullptr;
-        callback = nullptr;
-        
-        {
-            std::unique_lock<std::mutex> lock(mtx);
-            cv.wait(lock, [&] { 
-               return !event_msg_queue.empty() || flags.has_error || flags.release_invoked || !event_callback; 
-            });
-            
-            if ( flags.has_error || flags.release_invoked ) {
-                break; // exit thread
-            }
-            
-            callback = event_callback;
-            if ( !callback ) {
-                break; // exit thread
-            }
-            
-            event = event_msg_queue.front();
-            event_msg_queue.pop();
-        }
-        
-        if ( event ) {
-            callback(event);
-            delete event;
-        }
-    } while (true);
-    
-#ifdef DEBUG
-    client_print_message3("AAAA: event thread exit");
 #endif
 }
 
@@ -840,7 +771,7 @@ void AudioPlayer::onError(std::shared_ptr<Error> error, std::unique_lock<std::mu
         audio_renderer->stop();
         flags.is_playing = false;
     }
-    onEvent(new ErrorEventMessage(error));
+    onEvent(std::make_shared<ErrorEventMessage>(error));
 }
 
 void AudioPlayer::onPrepare() {
@@ -892,7 +823,7 @@ void AudioPlayer::onPlay(PlayWhenReadyChangeReason reason) {
         }
     }
     
-    onEvent(new PlayWhenReadyChangeEventMessage(true, reason));
+    onEvent(std::make_shared<PlayWhenReadyChangeEventMessage>(true, reason));
 }
 
 void AudioPlayer::onPause(PlayWhenReadyChangeReason reason, bool should_invoke_pause) {
@@ -915,17 +846,11 @@ void AudioPlayer::onPause(PlayWhenReadyChangeReason reason, bool should_invoke_p
         }
     }
     
-    onEvent(new PlayWhenReadyChangeEventMessage(false, reason));
+    onEvent(std::make_shared<PlayWhenReadyChangeEventMessage>(false, reason));
 }
 
-void AudioPlayer::onEvent(EventMessage* msg) {
-    if ( flags.release_invoked || !event_callback ) {
-        delete msg;
-        return;
-    }
-    
+void AudioPlayer::onEvent(std::shared_ptr<EventMessage> msg) {
     event_msg_queue.push(msg);
-    cv.notify_all();
 }
 
 OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* audio_buffer, int audio_buffer_size_in_bytes) {
@@ -938,7 +863,7 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* audi
     if ( flags.is_render_eof && !flags.is_playback_ended ) {
         flags.is_playback_ended = true;
         current_time_ms = duration_ms;
-        onEvent(new CurrentTimeEventMessage(current_time_ms));
+        onEvent(std::make_shared<CurrentTimeEventMessage>(current_time_ms));
         onPause(PlayWhenReadyChangeReason::PLAYBACK_ENDED);
 #ifdef DEBUG
     client_print_message("AAAA: playback ended");
@@ -956,7 +881,7 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* audi
         }
         int64_t pts_ms = av_rescale_q(pts, (AVRational){ 1, out_sample_rate }, (AVRational){ 1, 1000 });
         current_time_ms = pts_ms;
-        onEvent(new CurrentTimeEventMessage(pts_ms));
+        onEvent(std::make_shared<CurrentTimeEventMessage>(pts_ms));
         
         if ( flags.is_dec_eof ) {
             int read_samples = ff_ret;
