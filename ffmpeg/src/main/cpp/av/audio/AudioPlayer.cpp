@@ -290,6 +290,7 @@ void AudioPlayer::InitThread() {
         goto exit_thread;
     }
     
+    render_frame_size = nb_render_frame_samples;
     maximum_frame_threshold = std::max(av_rescale_q(5000, (AVRational){ 1, 1000 }, (AVRational) { 1, out_sample_rate }), nb_render_frame_samples * 5);
     minimum_frame_threshold = std::max(av_rescale_q(3000, (AVRational){ 1, 1000 }, (AVRational) { 1, out_sample_rate }), nb_render_frame_samples * 5);
     
