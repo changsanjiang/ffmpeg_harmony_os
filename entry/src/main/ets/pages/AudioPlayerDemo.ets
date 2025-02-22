@@ -42,7 +42,7 @@ struct AudioPlayerDemo {
   private mSliderProgress: number = 0;
   private mSliderState = SliderChangeMode.End;
   @State
-  private mPlaybackStateStr: string = "播放";
+  private mPlaybackStateStr: string = "点击播放";
 
   async aboutToAppear(): Promise<void> {
     // 把 rawfile 文件复制到 app 目录下
@@ -64,6 +64,7 @@ struct AudioPlayerDemo {
         // 播放控制
         Row({ space: 32 }) {
           Text('上一首')
+            .height(32)
             .fontSize(18)
             .fontWeight(FontWeight.Medium)
             .onClick(() => {
@@ -73,6 +74,7 @@ struct AudioPlayerDemo {
 
           Text(this.mPlaybackStateStr)
             .id('播放或暂停')
+            .height(32)
             .fontSize(18)
             .fontWeight(FontWeight.Medium)
             .onClick(() => {
@@ -81,6 +83,7 @@ struct AudioPlayerDemo {
             })
 
           Text('下一首')
+            .height(32)
             .fontSize(18)
             .fontWeight(FontWeight.Medium)
             .onClick(() => {
@@ -108,7 +111,6 @@ struct AudioPlayerDemo {
               if ( this.mDuration > 0 && this.mAudioPlayer && mode === SliderChangeMode.End ) {
                 console.log("AAAA: this.mAudioPlayer.seek");
                 this.mAudioPlayer.seek(value / 100 * this.mDuration);
-                this.mAudioPlayer.play();
               }
             }
           })
@@ -195,7 +197,7 @@ struct AudioPlayerDemo {
         this.playNext();
       }
 
-      this.mPlaybackStateStr = playWhenReady ? "暂停" : "播放";
+      this.mPlaybackStateStr = playWhenReady ? "点击暂停" : "点击播放";
     });
     player.on('durationChange', (durationMs) => {
       this.mDuration = durationMs;

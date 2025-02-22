@@ -75,6 +75,10 @@ int AudioFifo::getSize() {
     return fifo != nullptr ? av_audio_fifo_size(fifo) : 0;
 }
 
+int64_t AudioFifo::getNextPts() {
+    return next_pts;
+}
+
 void AudioFifo::release() {
     if ( fifo != nullptr ) {
         av_audio_fifo_free(fifo);

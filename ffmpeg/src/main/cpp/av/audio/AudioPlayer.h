@@ -114,6 +114,7 @@ private:
         unsigned is_dec_eof :1;
         unsigned is_render_eof :1;
         unsigned is_playback_ended :1;
+        unsigned should_reset_current_time :1;
         
         unsigned is_play_immediate :1;
         unsigned is_playing :1;

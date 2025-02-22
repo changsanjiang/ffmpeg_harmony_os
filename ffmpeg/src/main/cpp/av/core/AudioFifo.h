@@ -45,6 +45,7 @@ public:
     void clear();
     
     int getSize();  
+    int64_t getNextPts();
 
 private:
     AVAudioFifo* fifo = nullptr;        
