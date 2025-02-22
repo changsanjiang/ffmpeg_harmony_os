@@ -26,6 +26,7 @@ EventMessageQueue::~EventMessageQueue() {
 void EventMessageQueue::setEventCallback(EventCallback callback) {
     std::unique_lock<std::mutex> lock(mtx);  
     event_callback = callback;
+    startEventThreadIfNeeded();
 }
 
 void EventMessageQueue::push(std::shared_ptr<EventMessage> msg) {
@@ -36,13 +37,9 @@ void EventMessageQueue::push(std::shared_ptr<EventMessage> msg) {
     }
     
     msg_queue.push(msg);
+    startEventThreadIfNeeded();
     
-    // 创建线程延迟到收到首个消息的时候
-    if ( !msg_thread ) {
-        // 启动处理线程
-        msg_thread = std::make_unique<std::thread>(&EventMessageQueue::ProcessQueue, this);
-    }
-    else {
+    if ( msg_thread ) {
         // 提前解锁并通知消费线程
         lock.unlock();
         msg_cv.notify_one();
@@ -63,6 +60,12 @@ void EventMessageQueue::stop() {
     
     lock.unlock();
     msg_cv.notify_one();
+}
+
+void EventMessageQueue::startEventThreadIfNeeded() {
+    if ( is_running && !msg_thread && !msg_queue.empty() && event_callback ) {
+        msg_thread = std::make_unique<std::thread>(&EventMessageQueue::ProcessQueue, this);
+    }
 }
 
 void EventMessageQueue::ProcessQueue() {

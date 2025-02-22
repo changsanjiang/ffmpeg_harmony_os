@@ -26,13 +26,14 @@ public:
     void stop();
 
 private:
-    EventCallback event_callback;
+    EventCallback event_callback = nullptr;
     std::mutex mtx;
     std::condition_variable msg_cv;
     std::unique_ptr<std::thread> msg_thread = nullptr;
     std::queue<std::shared_ptr<EventMessage>> msg_queue;
     bool is_running = true;
     
+    void startEventThreadIfNeeded();
     void ProcessQueue();
 };
 
