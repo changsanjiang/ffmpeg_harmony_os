@@ -109,8 +109,9 @@ struct AudioPlayerDemo {
               console.log(`AAAA: mSliderStateChange: ${mode}`);
               this.mSliderState = mode;
               if ( this.mDuration > 0 && this.mAudioPlayer && mode === SliderChangeMode.End ) {
-                console.log("AAAA: this.mAudioPlayer.seek");
-                this.mAudioPlayer.seek(value / 100 * this.mDuration);
+                const time = value / 100 * this.mDuration;
+                console.log(`AAAA: seek ${time}`);
+                this.mAudioPlayer.seek(time);
               }
             }
           })
@@ -215,6 +216,7 @@ struct AudioPlayerDemo {
     });
     player.on('errorChange', (error) => {
       if ( error ) {
+        console.log(`error: ${error?.message}`);
         this.mAudioPlayer?.stop();
       }
     });
