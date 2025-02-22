@@ -54,6 +54,7 @@ void AudioPlayer::prepare() {
 
 void AudioPlayer::play() {
     std::lock_guard<std::mutex> lock(mtx);
+    flags.is_play_immediate = true;
     onPlay(PlayWhenReadyChangeReason::USER_REQUEST);
 }
 
@@ -793,15 +794,22 @@ void AudioPlayer::onEvaluate() {
         return;
     }
     
-    flags.is_playback_likely_to_keep_up = audio_fifo->getSize() >= minimum_frame_threshold;
+    bool keep_up_likely = (audio_fifo->getSize() >= minimum_frame_threshold) || flags.is_dec_eof;
+    bool play_immediate = (flags.is_play_immediate && audio_fifo->getSize() >= render_frame_size);
+
+#ifdef DEBUG
+    client_print_message3("keep_up_likely=%d, play_immediate=%d, minimum_frame_threshold=%d, render_size=%d, buffer_size=%d", keep_up_likely, play_immediate, minimum_frame_threshold, render_frame_size, audio_fifo->getSize());
+#endif
     
-    if ( flags.is_playback_likely_to_keep_up || flags.is_dec_eof ) {
+    if ( keep_up_likely || play_immediate ) {
+        flags.is_play_immediate = false;
         if ( !flags.is_playing ) {
             OH_AudioStream_Result ret = audio_renderer->play();
             if ( ret == AUDIOSTREAM_SUCCESS ) flags.is_playing = true;
         }
     }
-    else if ( audio_fifo->getSize() < render_frame_size ) {
+    // 缓冲枯竭的时候先暂停 renderer, 等待缓冲足够时恢复播放
+    else if ( audio_fifo->getSize() < render_frame_size ) { 
         if ( flags.is_playing ) {
             OH_AudioStream_Result ret = audio_renderer->pause();
             if ( ret == AUDIOSTREAM_SUCCESS ) flags.is_playing = false;
