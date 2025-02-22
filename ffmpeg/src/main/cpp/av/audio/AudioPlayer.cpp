@@ -911,6 +911,7 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* audi
             }
         }
         
+        lock.unlock();
         cv.notify_all(); // notify read
         return AUDIO_DATA_CALLBACK_RESULT_VALID;
     }
