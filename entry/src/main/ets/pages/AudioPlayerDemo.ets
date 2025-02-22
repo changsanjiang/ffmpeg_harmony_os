@@ -208,6 +208,9 @@ struct AudioPlayerDemo {
         this.mSliderProgress = this.mDuration > 0 ? (currentTimeMs / this.mDuration) * 100 : 0;
       }
     });
+    player.on('playableDurationChange', (playableDuration) => {
+      console.log(`bufferTime: ${playableDuration}`);
+    });
     player.on('errorChange', (error) => {
       if ( error ) {
         this.mAudioPlayer?.stop();

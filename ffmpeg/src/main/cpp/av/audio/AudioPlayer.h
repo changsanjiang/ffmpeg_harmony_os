@@ -114,8 +114,8 @@ private:
         unsigned is_dec_eof :1;
         unsigned is_render_eof :1;
         unsigned is_playback_ended :1;
-        unsigned is_playback_likely_to_keep_up :1;
         
+        unsigned is_play_immediate :1;
         unsigned is_playing :1;
     } flags = { 0 };
     
