@@ -428,6 +428,7 @@ restart:
                     flags.is_dec_eof = false;
                     flags.is_render_eof = false;
                     flags.is_playback_ended = false;
+                    flags.should_reset_current_time = true;
                     should_notify = true;
                 }
             }
@@ -590,6 +591,12 @@ void AudioPlayer::DecThread() {
                 else if ( ret < 0 ) {
                     error_occurred = true;
                 }
+            }
+            
+            if ( flags.should_reset_current_time && audio_fifo->getSize() > 0 ) {
+                flags.should_reset_current_time = false;
+                current_time_ms = av_rescale_q(audio_fifo->getNextPts(), (AVRational){ 1, out_sample_rate }, (AVRational){ 1, 1000 });
+                onEvent(std::make_shared<CurrentTimeEventMessage>(current_time_ms));
             }
             
             onEvaluate();
