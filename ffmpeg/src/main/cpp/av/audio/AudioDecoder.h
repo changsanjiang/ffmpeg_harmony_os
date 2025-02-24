@@ -10,8 +10,6 @@
 #include "av/core/MediaDecoder.h"
 #include "av/core/FilterGraph.h"
 #include "av/core/PacketQueue.h"
-#include "av/core/AudioFifo.h"
-#include <stdint.h>
 #include <thread>
 
 namespace FFAV {
@@ -27,22 +25,20 @@ public:
         AVSampleFormat output_sample_fmt, 
         int output_sample_rate,
         int output_nb_channels,
-        std::string output_ch_layout_desc,
-        int maximum_samples_threshold
+        std::string output_ch_layout_desc
     );
     void push(AVPacket* pkt, bool should_flush);
     void stop();
     
-    int64_t getBufferedPacketSize();
-    int getNumberOfDecodedSamples();
-    int64_t getNextPts(); // in output timebase;
-    int read(void** data, int nb_read_samples, int64_t* pts_ptr);
+    // 设置缓冲已满
+    // 当缓冲已满时将会暂停解码;
+    void setSampleBufferFull(bool is_full);
     
-    using DecodedSamplesChangeCallback = std::function<void(AudioDecoder* decoder)>;
-    void setDecodedSamplesChangeCallback(DecodedSamplesChangeCallback callback);
-     
-    using BufferedPacketSizeChangeCallback = std::function<void(AudioDecoder* decoder)>;
-    void setBufferedPacketSizeChangeCallback(BufferedPacketSizeChangeCallback callback);
+    using DecodeFrameCallback = std::function<void(AudioDecoder* decoder, AVFrame* frame)>;
+    void setDecodeFrameCallback(DecodeFrameCallback callback); // callback in locked;
+    
+    using PopPacketCallback = std::function<void(AudioDecoder* decoder, AVPacket* pkt)>;
+    void setPopPacketCallback(PopPacketCallback callback);
     
     using ErrorCallback = std::function<void(AudioDecoder* decoder, int ff_err)>;
     void setErrorCallback(ErrorCallback callback);
@@ -52,7 +48,7 @@ private:
     AVSampleFormat output_sample_fmt;
     int output_sample_rate;
     std::string output_ch_layout_desc;
-    int maximum_samples_threshold;
+    std::atomic<bool> is_sample_buffer_full;
     
     std::mutex mtx;
     std::condition_variable cv;
@@ -60,11 +56,10 @@ private:
     PacketQueue* pkt_queue = new PacketQueue();
     MediaDecoder* audio_decoder { nullptr };
     FilterGraph* filter_graph { nullptr };
-    AudioFifo* audio_fifo { nullptr };
     std::unique_ptr<std::thread> dec_thread { nullptr };
     
-    DecodedSamplesChangeCallback decoded_samples_change_callback { nullptr };
-    BufferedPacketSizeChangeCallback pkt_size_change_callback { nullptr };
+    DecodeFrameCallback decode_frame_callback { nullptr };
+    PopPacketCallback pop_pkt_callback { nullptr };
     ErrorCallback error_callback { nullptr };
     
     struct {
@@ -87,10 +82,6 @@ private:
         const std::string& out_ch_layout_desc
     );
     int resetFilterGraph();
-    int initAudioFifo(
-        AVSampleFormat sample_fmt, 
-        int nb_channels
-    );
 };
 
 }
