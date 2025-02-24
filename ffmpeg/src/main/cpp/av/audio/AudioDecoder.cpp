@@ -77,6 +77,7 @@ void AudioDecoder::push(AVPacket* pkt, bool should_flush) {
     }
 
     if ( should_flush ) {
+        flags.is_dec_eof = false;
         audio_decoder->flush();
         audio_fifo->clear();
         resetFilterGraph();
@@ -135,19 +136,38 @@ void AudioDecoder::stop() {
 
 int64_t AudioDecoder::getBufferedPacketSize() {
     std::unique_lock<std::mutex> lock(mtx);
+    if ( flags.release_invoked ) {
+        return 0;
+    }
     return pkt_queue->getSize();
 }
 
-void AudioDecoder::setDecodedFramesChangeCallback(AudioDecoder::DecodedFramesChangeCallback callback) {
-    decoded_frames_change_callback = callback;
+int AudioDecoder::getNumberOfDecodedSamples() {
+    std::unique_lock<std::mutex> lock(mtx);
+    if ( flags.release_invoked ) {
+        return 0;
+    }
+    return audio_fifo->getNumberOfSamples();    
 }
 
-void AudioDecoder::setErrorCallback(AudioDecoder::ErrorCallback callback) {
-    error_callback = callback;
+int AudioDecoder::read(void** data, int nb_read_samples, int64_t* pts_ptr) {
+    std::unique_lock<std::mutex> lock(mtx);
+    if ( flags.release_invoked ) {
+        return 0;
+    }
+    return audio_fifo->read(data, nb_read_samples, pts_ptr);
+}
+
+void AudioDecoder::setDecodedSamplesChangeCallback(AudioDecoder::DecodedSamplesChangeCallback callback) {
+    decoded_samples_change_callback = callback;
 }
 
 void AudioDecoder::setBufferedPacketSizeChangeCallback(AudioDecoder::BufferedPacketSizeChangeCallback callback) {
     pkt_size_change_callback = callback;
+}
+
+void AudioDecoder::setErrorCallback(AudioDecoder::ErrorCallback callback) {
+    error_callback = callback;
 }
 
 void AudioDecoder::DecThread() {
@@ -200,7 +220,7 @@ void AudioDecoder::DecThread() {
                 else {
                     lock.unlock();
                     if ( pkt_size_change_callback ) pkt_size_change_callback(this);
-                    if ( decoded_frames_change_callback ) decoded_frames_change_callback(this);
+                    if ( decoded_samples_change_callback ) decoded_samples_change_callback(this);
                 }
             }
             // read eof
@@ -214,7 +234,7 @@ void AudioDecoder::DecThread() {
                 if ( ret == AVERROR_EOF ) {
                     flags.is_dec_eof = true;
                     lock.unlock();
-                    if ( decoded_frames_change_callback ) decoded_frames_change_callback(this);
+                    if ( decoded_samples_change_callback ) decoded_samples_change_callback(this);
                 }
                 else if ( ret < 0 ) {
                     error_occurred = true;
