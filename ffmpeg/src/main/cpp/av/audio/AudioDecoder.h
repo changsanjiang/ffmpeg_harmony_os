@@ -7,64 +7,87 @@
 #ifndef FFMPEG_HARMONY_OS_AUDIODECODER_H
 #define FFMPEG_HARMONY_OS_AUDIODECODER_H
 
-#include "Error.h"
-#include "av/core/MediaReader.h"
 #include "av/core/MediaDecoder.h"
 #include "av/core/FilterGraph.h"
-#include "av/core/AudioFifo.h"
 #include "av/core/PacketQueue.h"
-#include <string>
+#include "av/core/AudioFifo.h"
+#include <stdint.h>
 #include <thread>
 
 namespace FFAV {
 
 class AudioDecoder {
 public:
-    struct Options {
-        int64_t start_time_position_ms;
-        AVSampleFormat output_sample_fmt;
-    };
-    
-    AudioDecoder(const std::string& url, Options opts);
+    AudioDecoder();
     ~AudioDecoder();
 
-    void prepare();
-    void seek(int64_t time_pos_ms);
-    int  read(void** data, int nb_samples, int64_t* pts); 
+    bool init(
+        AVCodecParameters* audio_stream_codecpar,
+        AVRational audio_stream_time_base,
+        AVSampleFormat output_sample_fmt, 
+        int output_sample_rate,
+        int output_nb_channels,
+        std::string output_ch_layout_desc,
+        int maximum_samples_threshold
+    );
+    void push(AVPacket* pkt, bool should_flush);
     void stop();
     
-    int getSize(); // 获取当前已解码的帧数 nb_samples;
+    int64_t getBufferedPacketSize();
     
-    using ErrorCallback = std::function<void(std::shared_ptr<Error> error)>;
+    using DecodedFramesChangeCallback = std::function<void(AudioDecoder* decoder)>;
+    void setDecodedFramesChangeCallback(DecodedFramesChangeCallback callback);
+     
+    using BufferedPacketSizeChangeCallback = std::function<void(AudioDecoder* decoder)>;
+    void setBufferedPacketSizeChangeCallback(BufferedPacketSizeChangeCallback callback);
+    
+    using ErrorCallback = std::function<void(AudioDecoder* decoder, int ff_err)>;
     void setErrorCallback(ErrorCallback callback);
     
 private:
-    const std::string url;
-    const int64_t start_time_position_ms;
+    AVBufferSrcParameters *buf_src_params;
+    AVSampleFormat output_sample_fmt;
+    int output_sample_rate;
+    std::string output_ch_layout_desc;
+    int maximum_samples_threshold;
     
     std::mutex mtx;
     std::condition_variable cv;
     
-    MediaReader* audio_reader = nullptr;
-    MediaDecoder* audio_decoder = nullptr;
-    FilterGraph* filter_graph = nullptr;
-    PacketQueue* pkt_queue = nullptr;
-    AudioFifo* audio_fifo = nullptr;
-    
-    ErrorCallback error_callback = nullptr;
-    
-    std::unique_ptr<std::thread> read_thread { nullptr };
+    PacketQueue* pkt_queue = new PacketQueue();
+    MediaDecoder* audio_decoder { nullptr };
+    FilterGraph* filter_graph { nullptr };
+    AudioFifo* audio_fifo { nullptr };
     std::unique_ptr<std::thread> dec_thread { nullptr };
     
-    struct {
-        unsigned int release_invoked :1;
-        
-    } flags { 0 };
+    DecodedFramesChangeCallback decoded_frames_change_callback { nullptr };
+    BufferedPacketSizeChangeCallback pkt_size_change_callback { nullptr };
+    ErrorCallback error_callback { nullptr };
     
-    void ReadThread();
+    struct {
+        unsigned int init_successful :1;
+        unsigned int release_invoked :1;
+        unsigned int has_error :1;
+        unsigned int is_read_eof :1;
+        unsigned int is_dec_eof :1;
+    } flags;
+    
     void DecThread();
     
-    void init();
+    int initAudioDecoder(AVCodecParameters* codecpar);
+    int initFilterGraph(
+        const char* buf_src_name,
+        const char* buf_sink_name,
+        AVBufferSrcParameters *buf_src_params, 
+        AVSampleFormat out_sample_fmt,
+        int out_sample_rate,
+        const std::string& out_ch_layout_desc
+    );
+    int resetFilterGraph();
+    int initAudioFifo(
+        AVSampleFormat sample_fmt, 
+        int nb_channels
+    );
 };
 
 }

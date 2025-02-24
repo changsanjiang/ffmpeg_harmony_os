@@ -35,8 +35,6 @@ MediaReader::MediaReader() = default;
 MediaReader::~MediaReader() { release(); }
 
 int MediaReader::open(const std::string& url) {
-    std::lock_guard<std::mutex> lock(interruption_mutex);        
-    
     fmt_ctx = avformat_alloc_context();
     if ( fmt_ctx == nullptr ) {
         return AVERROR(ENOMEM);
@@ -47,6 +45,10 @@ int MediaReader::open(const std::string& url) {
     int ret = avformat_open_input(&fmt_ctx, url.c_str(), nullptr, nullptr);
     if ( ret < 0 ) {
         return ret;
+    }
+     
+    if ( interrupt_requested.load() ) {
+        return AVERROR_EXIT;
     }
 
     return avformat_find_stream_info(fmt_ctx, nullptr);
@@ -89,7 +91,10 @@ int MediaReader::readPacket(AVPacket* _Nonnull pkt) {
         throw std::runtime_error("AVFormatContext is not initialized");
     }
 
-    std::lock_guard<std::mutex> lock(interruption_mutex);        // 读取前锁定
+    if ( interrupt_requested.load() ) {
+        return AVERROR_EXIT;
+    }
+
     return av_read_frame(fmt_ctx, pkt);
 }
 
@@ -98,20 +103,19 @@ int MediaReader::seek(int64_t timestamp, int stream_index, int flags) {
         throw std::runtime_error("AVFormatContext is not initialized");
     }
     
-    std::lock_guard<std::mutex> lock(interruption_mutex);    
+    if ( interrupt_requested.load() ) {
+        return AVERROR_EXIT;
+    }
+
     return av_seek_frame(fmt_ctx, -1, timestamp, AVSEEK_FLAG_BACKWARD);
 }
 
 void MediaReader::interrupt() {
-    if ( fmt_ctx ) {
-        interrupt_requested.store(true);
-        std::lock_guard<std::mutex> lock(interruption_mutex);        // 等待读取中断        
-        interrupt_requested.store(false);
-    }
+    interrupt_requested.store(true);
 }
 
 void MediaReader::release() {
-    if ( fmt_ctx != nullptr ) {
+    if ( fmt_ctx ) {
         interrupt();
 
         avformat_close_input(&fmt_ctx);

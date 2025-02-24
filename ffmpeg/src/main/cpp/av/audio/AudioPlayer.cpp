@@ -533,7 +533,7 @@ void AudioPlayer::DecThread() {
                 }
                 
                 // frame buf 是否还可以继续填充
-                if ( audio_fifo->getSize() < maximum_frame_threshold ) {
+                if ( audio_fifo->getNumberOfSamples() < maximum_frame_threshold ) {
                     // 判断是否有可解码的 pkt 或 read eof;
                     return pkt_queue->getCount() > 0 || flags.is_read_eof;
                 }
@@ -593,7 +593,7 @@ void AudioPlayer::DecThread() {
                 }
             }
             
-            if ( flags.should_reset_current_time && audio_fifo->getSize() > 0 ) {
+            if ( flags.should_reset_current_time && audio_fifo->getNumberOfSamples() > 0 ) {
                 flags.should_reset_current_time = false;
                 current_time_ms = av_rescale_q(audio_fifo->getNextPts(), (AVRational){ 1, out_sample_rate }, (AVRational){ 1, 1000 });
                 onEvent(std::make_shared<CurrentTimeEventMessage>(current_time_ms));
@@ -801,8 +801,8 @@ void AudioPlayer::onEvaluate() {
         return;
     }
     
-    bool keep_up_likely = (audio_fifo->getSize() >= minimum_frame_threshold) || flags.is_dec_eof;
-    bool play_immediate = (flags.is_play_immediate && audio_fifo->getSize() >= render_frame_size);
+    bool keep_up_likely = (audio_fifo->getNumberOfSamples() >= minimum_frame_threshold) || flags.is_dec_eof;
+    bool play_immediate = (flags.is_play_immediate && audio_fifo->getNumberOfSamples() >= render_frame_size);
 
 #ifdef DEBUG
     client_print_message3("keep_up_likely=%d, play_immediate=%d, minimum_frame_threshold=%d, render_size=%d, buffer_size=%d", keep_up_likely, play_immediate, minimum_frame_threshold, render_frame_size, audio_fifo->getSize());
@@ -816,7 +816,7 @@ void AudioPlayer::onEvaluate() {
         }
     }
     // 缓冲枯竭的时候先暂停 renderer, 等待缓冲足够时恢复播放
-    else if ( audio_fifo->getSize() < render_frame_size ) { 
+    else if ( audio_fifo->getNumberOfSamples() < render_frame_size ) { 
         if ( flags.is_playing ) {
             OH_AudioStream_Result ret = audio_renderer->pause();
             if ( ret == AUDIOSTREAM_SUCCESS ) flags.is_playing = false;
@@ -891,7 +891,7 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* audi
     }
     
     int audio_buffer_samples = audio_buffer_size_in_bytes / out_nb_channels / out_bytes_per_sample;
-    if ( audio_fifo->getSize() >= audio_buffer_samples || flags.is_dec_eof ) {
+    if ( audio_fifo->getNumberOfSamples() >= audio_buffer_samples || flags.is_dec_eof ) {
         int64_t pts;
         int ff_ret = audio_fifo->read(&audio_buffer, audio_buffer_samples, &pts);
         if ( ff_ret < 0 ) {

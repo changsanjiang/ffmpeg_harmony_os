@@ -44,7 +44,7 @@ public:
     int read(void** data, int nb_samples, int64_t *pts_ptr);
     void clear();
     
-    int getSize();  
+    int getNumberOfSamples();  
     int64_t getNextPts();
 
 private:

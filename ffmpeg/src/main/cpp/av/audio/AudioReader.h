@@ -22,7 +22,10 @@ public:
     void prepare();
     void seek(int64_t time_pos_ms);
     void stop();
-    void setBufferedPacketSize(int64_t size);
+    
+    // 设置缓冲是否已满;
+    // 当缓冲已满时将会暂停读取;
+    void setPacketBufferFull(bool is_full);
     
     // seek 之后， read pkt 之前 Queue中的数据都可以使用
     // read pkt 之后(should_flush == true)， queue 中的数据需要清空， 用来存放新位置的 pkt;
@@ -46,8 +49,7 @@ private:
     AVRational audio_stream_time_base;
     int64_t audio_stream_duration_ms;
     
-    int64_t pkt_size_threshold { 5 * 1024 * 1024 }; // in bytes, 5M;
-    std::atomic<int64_t> pkt_size_bufferred;
+    std::atomic<bool> is_pkt_buffer_full;
 
     int64_t req_seek_time; // in base q;
     int64_t seeking_time { AV_NOPTS_VALUE }; // in base q; current seek time; 
