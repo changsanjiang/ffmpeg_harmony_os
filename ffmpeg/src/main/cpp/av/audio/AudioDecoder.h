@@ -35,6 +35,7 @@ public:
     
     int64_t getBufferedPacketSize();
     int getNumberOfDecodedSamples();
+    int64_t getNextPts(); // in output timebase;
     int read(void** data, int nb_read_samples, int64_t* pts_ptr);
     
     using DecodedSamplesChangeCallback = std::function<void(AudioDecoder* decoder)>;

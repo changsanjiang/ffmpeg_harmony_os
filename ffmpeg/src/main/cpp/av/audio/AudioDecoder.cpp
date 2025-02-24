@@ -150,6 +150,14 @@ int AudioDecoder::getNumberOfDecodedSamples() {
     return audio_fifo->getNumberOfSamples();    
 }
 
+int64_t AudioDecoder::getNextPts() {
+    std::unique_lock<std::mutex> lock(mtx);
+    if ( flags.release_invoked ) {
+        return AV_NOPTS_VALUE;
+    }
+    return audio_fifo->getNextPts();    
+}
+
 int AudioDecoder::read(void** data, int nb_read_samples, int64_t* pts_ptr) {
     std::unique_lock<std::mutex> lock(mtx);
     if ( flags.release_invoked ) {
