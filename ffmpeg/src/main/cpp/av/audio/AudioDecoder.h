@@ -34,9 +34,11 @@ public:
     void stop();
     
     int64_t getBufferedPacketSize();
+    int getNumberOfDecodedSamples();
+    int read(void** data, int nb_read_samples, int64_t* pts_ptr);
     
-    using DecodedFramesChangeCallback = std::function<void(AudioDecoder* decoder)>;
-    void setDecodedFramesChangeCallback(DecodedFramesChangeCallback callback);
+    using DecodedSamplesChangeCallback = std::function<void(AudioDecoder* decoder)>;
+    void setDecodedSamplesChangeCallback(DecodedSamplesChangeCallback callback);
      
     using BufferedPacketSizeChangeCallback = std::function<void(AudioDecoder* decoder)>;
     void setBufferedPacketSizeChangeCallback(BufferedPacketSizeChangeCallback callback);
@@ -60,7 +62,7 @@ private:
     AudioFifo* audio_fifo { nullptr };
     std::unique_ptr<std::thread> dec_thread { nullptr };
     
-    DecodedFramesChangeCallback decoded_frames_change_callback { nullptr };
+    DecodedSamplesChangeCallback decoded_samples_change_callback { nullptr };
     BufferedPacketSizeChangeCallback pkt_size_change_callback { nullptr };
     ErrorCallback error_callback { nullptr };
     
