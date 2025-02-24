@@ -41,6 +41,22 @@ public:
         const std::string& buf_sink_name,
         AudioFifo* _Nonnull fifo
     );
+    
+    static int send_pkt(
+        AVPacket* _Nullable pkt,
+        MediaDecoder* _Nonnull decoder, 
+        AVFrame* _Nonnull dec_frame,
+        FilterGraph* _Nonnull filter_graph,
+        const std::string& buf_src_name
+    );
+    
+    using GetFrameCallback = std::function<void(AVFrame* filt_frame)>;
+    static int get_frames(
+        FilterGraph* _Nonnull filter_graph,
+        const std::string& buf_sink_name,
+        AVFrame* _Nonnull filt_frame,
+        GetFrameCallback callback
+    );
 
 private:
     static int process_decoded_frames(
@@ -67,6 +83,19 @@ private:
         AVFrame* _Nonnull filt_frame,
         const std::string& buf_sink_name,
         AudioFifo* _Nonnull fifo
+    );
+    
+    static int filter_add_dec_frames(
+        MediaDecoder* _Nonnull decoder, 
+        AVFrame* _Nonnull dec_frame,
+        FilterGraph* _Nonnull filter_graph,
+        const std::string& buf_src_name
+    );
+    
+    static int filter_add_dec_frame(
+        AVFrame* _Nullable frame,
+        FilterGraph* _Nonnull filter_graph,
+        const std::string& buf_src_name
     );
 };
 

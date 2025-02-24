@@ -71,7 +71,7 @@ void AudioFifo::clear() {
     }
 }
 
-int AudioFifo::getSize() {
+int AudioFifo::getNumberOfSamples() {
     return fifo != nullptr ? av_audio_fifo_size(fifo) : 0;
 }
 

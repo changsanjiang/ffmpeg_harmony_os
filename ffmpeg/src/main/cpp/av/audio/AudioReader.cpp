@@ -80,8 +80,8 @@ void AudioReader::stop() {
     }
 }
 
-void AudioReader::setBufferedPacketSize(int64_t size) {
-    pkt_size_bufferred.store(size);
+void AudioReader::setPacketBufferFull(bool is_full) {
+    is_pkt_buffer_full.store(is_full);
     cv.notify_all();
 }
 
@@ -164,7 +164,7 @@ restart:
                     return true;
                 }
                 
-                return !flags.is_read_eof && pkt_size_bufferred.load() < pkt_size_threshold;
+                return !flags.is_read_eof && !is_pkt_buffer_full.load();
             });
             
             if ( flags.has_error || flags.release_invoked ) {
@@ -230,8 +230,16 @@ restart:
             }
             else if ( ret < 0 ) {
                 if ( ret == AVERROR_EOF ) {
+                    bool should_flush = seeking_time != AV_NOPTS_VALUE; 
+                    if ( should_flush ) {
+                        seeking_time = AV_NOPTS_VALUE;
+                    }
+                    
                     // read eof
                     flags.is_read_eof = true;
+                    
+                    lock.unlock();
+                    if ( read_pkt_callback ) read_pkt_callback(this, nullptr, should_flush);
                 }
                 else {
                     // error
