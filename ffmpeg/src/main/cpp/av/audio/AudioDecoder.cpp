@@ -8,12 +8,11 @@
 #include "av/core/AudioUtils.h"
 #include <memory>
 #include <sstream>
-#include <stdint.h>
 
 namespace FFAV {
 
-const char* FILTER_BUFFER_SRC_NAME = "0:a";
-const char* FILTER_BUFFER_SINK_NAME = "outa";
+static const char* FILTER_BUFFER_SRC_NAME = "0:a";
+static const char* FILTER_BUFFER_SINK_NAME = "outa";
 
 AudioDecoder::AudioDecoder() {
     
@@ -29,8 +28,7 @@ bool AudioDecoder::init(
     AVSampleFormat output_sample_fmt, 
     int output_sample_rate,
     int output_nb_channels,
-    std::string output_ch_layout_desc,
-    int maximum_samples_threshold
+    std::string output_ch_layout_desc
 ) {
     std::unique_lock<std::mutex> lock(mtx);
     if ( flags.has_error || flags.release_invoked ) {
@@ -40,7 +38,6 @@ bool AudioDecoder::init(
     this->output_sample_fmt = output_sample_fmt;
     this->output_sample_rate = output_sample_rate;
     this->output_ch_layout_desc = output_ch_layout_desc;
-    this->maximum_samples_threshold = maximum_samples_threshold;
     
     int ret = initAudioDecoder(audio_stream_codecpar);
     if ( ret < 0 ) {
@@ -49,11 +46,6 @@ bool AudioDecoder::init(
     
     buf_src_params = audio_decoder->createBufferSrcParameters(audio_stream_time_base);
     ret = resetFilterGraph();
-    if ( ret < 0 ) {
-        goto exit_init;
-    }
-    
-    ret = initAudioFifo(output_sample_fmt, output_nb_channels);
     if ( ret < 0 ) {
         goto exit_init;
     }
@@ -79,7 +71,6 @@ void AudioDecoder::push(AVPacket* pkt, bool should_flush) {
     if ( should_flush ) {
         flags.is_dec_eof = false;
         audio_decoder->flush();
-        audio_fifo->clear();
         resetFilterGraph();
     }
     
@@ -89,7 +80,6 @@ void AudioDecoder::push(AVPacket* pkt, bool should_flush) {
         }
         pkt_queue->push(pkt);
         lock.unlock();
-        if ( pkt_size_change_callback ) pkt_size_change_callback(this);
         cv.notify_all();
     }
     else {
@@ -125,53 +115,22 @@ void AudioDecoder::stop() {
         delete filter_graph;
     }
     
-    if ( audio_fifo ) {
-        delete audio_fifo;
-    }
-    
     if ( buf_src_params ) {
         av_free(buf_src_params);
     }
 }
 
-int64_t AudioDecoder::getBufferedPacketSize() {
-    std::unique_lock<std::mutex> lock(mtx);
-    if ( flags.release_invoked ) {
-        return 0;
-    }
-    return pkt_queue->getSize();
+void AudioDecoder::setSampleBufferFull(bool is_full) {
+    is_sample_buffer_full.store(is_full);
+    cv.notify_all();
 }
 
-int AudioDecoder::getNumberOfDecodedSamples() {
-    std::unique_lock<std::mutex> lock(mtx);
-    if ( flags.release_invoked ) {
-        return 0;
-    }
-    return audio_fifo->getNumberOfSamples();    
+void AudioDecoder::setDecodeFrameCallback(AudioDecoder::DecodeFrameCallback callback) {
+    decode_frame_callback = callback;
 }
 
-int64_t AudioDecoder::getNextPts() {
-    std::unique_lock<std::mutex> lock(mtx);
-    if ( flags.release_invoked ) {
-        return AV_NOPTS_VALUE;
-    }
-    return audio_fifo->getNextPts();    
-}
-
-int AudioDecoder::read(void** data, int nb_read_samples, int64_t* pts_ptr) {
-    std::unique_lock<std::mutex> lock(mtx);
-    if ( flags.release_invoked ) {
-        return 0;
-    }
-    return audio_fifo->read(data, nb_read_samples, pts_ptr);
-}
-
-void AudioDecoder::setDecodedSamplesChangeCallback(AudioDecoder::DecodedSamplesChangeCallback callback) {
-    decoded_samples_change_callback = callback;
-}
-
-void AudioDecoder::setBufferedPacketSizeChangeCallback(AudioDecoder::BufferedPacketSizeChangeCallback callback) {
-    pkt_size_change_callback = callback;
+void AudioDecoder::setPopPacketCallback(AudioDecoder::PopPacketCallback callback) {
+    pop_pkt_callback = callback;
 }
 
 void AudioDecoder::setErrorCallback(AudioDecoder::ErrorCallback callback) {
@@ -201,8 +160,7 @@ void AudioDecoder::DecThread() {
                     return false;
                 }
                 
-                // frame buf 是否还可以继续填充
-                if ( audio_fifo->getNumberOfSamples() < maximum_samples_threshold ) {
+                if ( !is_sample_buffer_full.load() ) {
                     // 判断是否有可解码的 pkt 或 read eof;
                     return pkt_queue->getCount() > 0 || flags.is_read_eof;
                 }
@@ -215,8 +173,12 @@ void AudioDecoder::DecThread() {
             }
             // dec pkt
             else if ( pkt_queue->pop(pkt) ) {
-                ret = AudioUtils::transcode(pkt, audio_decoder, dec_frame, filter_graph, filt_frame, FILTER_BUFFER_SRC_NAME, FILTER_BUFFER_SINK_NAME, audio_fifo);
-                av_packet_unref(pkt);
+                ret = AudioUtils::send_pkt(pkt, audio_decoder, dec_frame, filter_graph, FILTER_BUFFER_SRC_NAME);
+                if ( ret >= 0 ) {
+                    ret = AudioUtils::get_frames(filter_graph, FILTER_BUFFER_SINK_NAME, filt_frame, [&](AVFrame *frame) {
+                        if ( decode_frame_callback ) decode_frame_callback(this, frame);
+                    });
+                }
                 
                 // error
                 if ( ret < 0 && ret != AVERROR(EAGAIN) ) {
@@ -227,22 +189,27 @@ void AudioDecoder::DecThread() {
                 }
                 else {
                     lock.unlock();
-                    if ( pkt_size_change_callback ) pkt_size_change_callback(this);
-                    if ( decoded_samples_change_callback ) decoded_samples_change_callback(this);
+                    if ( pop_pkt_callback ) pop_pkt_callback(this, pkt);
                 }
+                
+                av_packet_unref(pkt);
             }
             // read eof
             else if ( flags.is_read_eof ) {
 #ifdef DEBUG
                 client_print_message3("AAAA: dec eof, fifo size: %ld", audio_fifo->getSize());
 #endif
-                ret = AudioUtils::transcode(nullptr, audio_decoder, dec_frame, filter_graph, filt_frame, FILTER_BUFFER_SRC_NAME, FILTER_BUFFER_SINK_NAME, audio_fifo);
+                ret = AudioUtils::send_pkt(nullptr, audio_decoder, dec_frame, filter_graph, FILTER_BUFFER_SRC_NAME);
+                if ( ret >= 0 ) {
+                    ret = AudioUtils::get_frames(filter_graph, FILTER_BUFFER_SINK_NAME, filt_frame, [&](AVFrame *frame) {
+                        if ( decode_frame_callback ) decode_frame_callback(this, frame);
+                    });
+                }
                 
                 // dec eof
                 if ( ret == AVERROR_EOF ) {
                     flags.is_dec_eof = true;
-                    lock.unlock();
-                    if ( decoded_samples_change_callback ) decoded_samples_change_callback(this);
+                    if ( decode_frame_callback ) decode_frame_callback(this, nullptr);
                 }
                 else if ( ret < 0 ) {
                     error_occurred = true;
@@ -331,22 +298,6 @@ int AudioDecoder::initFilterGraph(
 
 int AudioDecoder::resetFilterGraph() {
     return initFilterGraph(FILTER_BUFFER_SRC_NAME, FILTER_BUFFER_SINK_NAME, buf_src_params, output_sample_fmt, output_sample_rate, output_ch_layout_desc);
-}
-
-int AudioDecoder::initAudioFifo(
-    AVSampleFormat sample_fmt, 
-    int nb_channels
-) {
-    int ff_ret = 0;
-    
-    // init audio fifo buffer
-    audio_fifo = new AudioFifo();
-    ff_ret = audio_fifo->init(sample_fmt, nb_channels, 1);
-    if ( ff_ret < 0 ) {
-        return ff_ret;
-    }
-
-    return 0;
 }
 
 }
