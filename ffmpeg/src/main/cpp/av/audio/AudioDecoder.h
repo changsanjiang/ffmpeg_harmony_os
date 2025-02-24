@@ -24,7 +24,6 @@ public:
         AVRational audio_stream_time_base,
         AVSampleFormat output_sample_fmt, 
         int output_sample_rate,
-        int output_nb_channels,
         std::string output_ch_layout_desc
     );
     void push(AVPacket* pkt, bool should_flush);
