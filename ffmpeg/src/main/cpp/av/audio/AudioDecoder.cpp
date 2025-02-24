@@ -27,7 +27,6 @@ bool AudioDecoder::init(
     AVRational audio_stream_time_base,
     AVSampleFormat output_sample_fmt, 
     int output_sample_rate,
-    int output_nb_channels,
     std::string output_ch_layout_desc
 ) {
     std::unique_lock<std::mutex> lock(mtx);
@@ -62,6 +61,7 @@ exit_init:
     return true;
 }
 
+// pkt 为 nullptr 时, 表示 read_eof;
 void AudioDecoder::push(AVPacket* pkt, bool should_flush) {
     std::unique_lock<std::mutex> lock(mtx);
     if ( flags.has_error || flags.release_invoked ) {
@@ -160,12 +160,12 @@ void AudioDecoder::DecThread() {
                     return false;
                 }
                 
-                if ( !is_sample_buffer_full.load() ) {
-                    // 判断是否有可解码的 pkt 或 read eof;
-                    return pkt_queue->getCount() > 0 || flags.is_read_eof;
+                if ( is_sample_buffer_full.load() ) {
+                    return false;
                 }
                 
-                return false;
+                // 判断是否有可解码的 pkt 或 read eof;
+                return pkt_queue->getCount() > 0 || flags.is_read_eof;
             });
             
             if ( flags.has_error || flags.release_invoked ) {
