@@ -99,7 +99,38 @@ void AudioDecoder::push(AVPacket* pkt, bool should_flush) {
 }
 
 void AudioDecoder::stop() {
+    std::unique_lock<std::mutex> lock(mtx);
+    if ( flags.release_invoked ) {
+        return;
+    }
     
+    flags.release_invoked = true;
+    lock.unlock();
+    cv.notify_all();
+    
+    if ( dec_thread && dec_thread->joinable() ) {
+        dec_thread->join();
+    }
+    
+    if ( pkt_queue ) {
+        delete pkt_queue;
+    }
+    
+    if ( audio_decoder ) {
+        delete audio_decoder;
+    }
+    
+    if ( filter_graph ) {
+        delete filter_graph;
+    }
+    
+    if ( audio_fifo ) {
+        delete audio_fifo;
+    }
+    
+    if ( buf_src_params ) {
+        av_free(buf_src_params);
+    }
 }
 
 int64_t AudioDecoder::getBufferedPacketSize() {
