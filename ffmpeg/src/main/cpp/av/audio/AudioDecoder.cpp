@@ -46,14 +46,8 @@ AudioDecoder::~AudioDecoder() {
 int AudioDecoder::init(
     AVCodecParameters* audio_stream_codecpar,
     AVRational audio_stream_time_base,
-    AVSampleFormat output_sample_fmt, 
-    int output_sample_rate,
-    std::string output_ch_layout_desc
+    AVSampleFormat output_sample_fmt
 ) {
-    
-    this->output_sample_fmt = output_sample_fmt;
-    this->output_sample_rate = output_sample_rate;
-    this->output_ch_layout_desc = output_ch_layout_desc;
     
     int ret = initAudioDecoder(audio_stream_codecpar);
     if ( ret < 0 ) {
@@ -61,6 +55,14 @@ int AudioDecoder::init(
     }
     
     buf_src_params = audio_decoder->createBufferSrcParameters(audio_stream_time_base);
+    
+    this->output_sample_fmt = output_sample_fmt;
+    output_sample_rate = buf_src_params->sample_rate;
+    output_nb_channels = buf_src_params->ch_layout.nb_channels;
+    char ch_layout_desc[64];
+    av_channel_layout_describe(&buf_src_params->ch_layout, ch_layout_desc, sizeof(ch_layout_desc)); // get channel layout desc
+    output_ch_layout_desc = ch_layout_desc;
+    
     ret = resetFilterGraph();
     if ( ret < 0 ) {
         return ret;
@@ -72,14 +74,25 @@ int AudioDecoder::init(
     return 0;
 }
 
-int AudioDecoder::decode(AVPacket* pkt, AudioFifo* fifo, bool should_flush) {
-    if ( should_flush ) {
-        audio_decoder->flush();
-        resetFilterGraph();
-        fifo->clear();
-    }
-    
+int AudioDecoder::decode(AVPacket* pkt, AudioFifo* fifo) {
     return AudioUtils::transcode(pkt, audio_decoder, dec_frame, filter_graph, filt_frame, FILTER_BUFFER_SRC_NAME, FILTER_BUFFER_SINK_NAME, fifo);
+}
+
+void AudioDecoder::flush() {
+    audio_decoder->flush();
+    resetFilterGraph();
+}
+
+AVSampleFormat AudioDecoder::getOutputSampleFormat() {
+    return output_sample_fmt;
+}
+
+int AudioDecoder::getOutputSampleRate() {
+    return output_sample_rate;
+}
+
+int AudioDecoder::getOutputChannels() {
+    return output_nb_channels;
 }
 
 int AudioDecoder::initAudioDecoder(AVCodecParameters* codecpar) {

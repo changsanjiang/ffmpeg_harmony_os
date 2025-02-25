@@ -11,39 +11,30 @@ namespace FFAV {
 EventMessageQueue::EventMessageQueue() = default;
 
 EventMessageQueue::~EventMessageQueue() {
-    // 这里上锁，确保线程安全
-    std::unique_lock<std::mutex> lock(mtx);
-    is_running = false;
-    // 提前解锁通知等待的工作线程该退出了
-    lock.unlock();
-    msg_cv.notify_one();
-    
-    if ( msg_thread && msg_thread->joinable() ) {
-        msg_thread->join();
-    }
+    stop();
 }
 
 void EventMessageQueue::setEventCallback(EventCallback callback) {
     std::unique_lock<std::mutex> lock(mtx);  
     event_callback = callback;
-    startEventThreadIfNeeded();
+    
+    if ( callback ) {
+        if ( !msg_thread ) {
+            msg_thread = std::make_unique<std::thread>(&EventMessageQueue::ProcessQueue, this);
+        }
+    }
 }
 
 void EventMessageQueue::push(std::shared_ptr<EventMessage> msg) {
     // 这里上锁，确保线程安全
     std::unique_lock<std::mutex> lock(mtx);  
-    if ( !is_running ) {
+    if ( !is_running || event_callback == nullptr ) {
         return;
     }
     
     msg_queue.push(msg);
-    startEventThreadIfNeeded();
-    
-    if ( msg_thread ) {
-        // 提前解锁并通知消费线程
-        lock.unlock();
-        msg_cv.notify_one();
-    }
+    lock.unlock();
+    msg_cv.notify_all();
 }
 
 void EventMessageQueue::stop() {
@@ -59,12 +50,10 @@ void EventMessageQueue::stop() {
     }
     
     lock.unlock();
-    msg_cv.notify_one();
-}
-
-void EventMessageQueue::startEventThreadIfNeeded() {
-    if ( is_running && !msg_thread && !msg_queue.empty() && event_callback ) {
-        msg_thread = std::make_unique<std::thread>(&EventMessageQueue::ProcessQueue, this);
+    msg_cv.notify_all();
+    
+    if ( msg_thread && msg_thread->joinable() ) {
+        msg_thread->join();
     }
 }
 

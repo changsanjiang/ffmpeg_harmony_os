@@ -23,16 +23,20 @@ public:
     int init(
         AVCodecParameters* audio_stream_codecpar,
         AVRational audio_stream_time_base,
-        AVSampleFormat output_sample_fmt, 
-        int output_sample_rate,
-        std::string output_ch_layout_desc
+        AVSampleFormat output_sample_fmt
     );
-    int decode(AVPacket* pkt, AudioFifo* fifo, bool should_flush);
+    int decode(AVPacket* pkt, AudioFifo* fifo);
+    void flush();
+    
+    AVSampleFormat getOutputSampleFormat();
+    int getOutputSampleRate();
+    int getOutputChannels();
     
 private:
     AVBufferSrcParameters *buf_src_params;
     AVSampleFormat output_sample_fmt;
     int output_sample_rate;
+    int output_nb_channels;
     std::string output_ch_layout_desc;
     
     MediaDecoder* audio_decoder { nullptr };

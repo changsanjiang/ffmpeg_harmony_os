@@ -53,7 +53,7 @@ private:
     AVRational audio_stream_time_base;
     int64_t audio_stream_duration_ms;
     
-    std::atomic<bool> is_pkt_buffer_full;
+    std::atomic<bool> is_pkt_buffer_full { false };
 
     int64_t req_seek_time; // in base q;
     int64_t seeking_time { AV_NOPTS_VALUE }; // in base q; current seek time; 
