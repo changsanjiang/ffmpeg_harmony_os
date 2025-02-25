@@ -1,112 +1,23 @@
 //
-// Created on 2025/2/22.
+// Created on 2025/2/25.
 //
 // Node APIs are not fully supported. To solve the compilation error of the interface cannot be found,
 // please include "napi/native_api.h".
 
 #include "AudioDecoder.h"
 #include "av/core/AudioUtils.h"
-#include <memory>
 #include <sstream>
 
 namespace FFAV {
 
-static const char* FILTER_BUFFER_SRC_NAME = "0:a";
-static const char* FILTER_BUFFER_SINK_NAME = "outa";
+static const char *FILTER_BUFFER_SRC_NAME = "0:a";
+static const char *FILTER_BUFFER_SINK_NAME = "outa";
 
 AudioDecoder::AudioDecoder() {
     
 }
 
 AudioDecoder::~AudioDecoder() {
-    stop();
-}
-
-bool AudioDecoder::init(
-    AVCodecParameters* audio_stream_codecpar,
-    AVRational audio_stream_time_base,
-    AVSampleFormat output_sample_fmt, 
-    int output_sample_rate,
-    std::string output_ch_layout_desc
-) {
-    std::unique_lock<std::mutex> lock(mtx);
-    if ( flags.has_error || flags.release_invoked ) {
-        return false;
-    }
-    
-    this->output_sample_fmt = output_sample_fmt;
-    this->output_sample_rate = output_sample_rate;
-    this->output_ch_layout_desc = output_ch_layout_desc;
-    
-    int ret = initAudioDecoder(audio_stream_codecpar);
-    if ( ret < 0 ) {
-        goto exit_init;
-    }
-    
-    buf_src_params = audio_decoder->createBufferSrcParameters(audio_stream_time_base);
-    ret = resetFilterGraph();
-    if ( ret < 0 ) {
-        goto exit_init;
-    }
-    
-    dec_thread = std::make_unique<std::thread>(&AudioDecoder::DecThread, this);
-    
-exit_init: 
-    if ( ret < 0 ) {
-        flags.has_error = true;
-        lock.unlock();
-        if ( error_callback ) error_callback(this, ret);
-        return false;
-    }
-    return true;
-}
-
-// pkt 为 nullptr 时, 表示 read_eof;
-void AudioDecoder::push(AVPacket* pkt, bool should_flush) {
-    std::unique_lock<std::mutex> lock(mtx);
-    if ( flags.has_error || flags.release_invoked ) {
-        return;
-    }
-
-    if ( should_flush ) {
-        flags.is_dec_eof = false;
-        audio_decoder->flush();
-        resetFilterGraph();
-    }
-    
-    if ( pkt ) {
-        if ( flags.is_read_eof ) {
-            flags.is_read_eof = false;
-        }
-        pkt_queue->push(pkt);
-        lock.unlock();
-        cv.notify_all();
-    }
-    else {
-        flags.is_read_eof = true;
-        lock.unlock();
-        cv.notify_all();
-    }
-}
-
-void AudioDecoder::stop() {
-    std::unique_lock<std::mutex> lock(mtx);
-    if ( flags.release_invoked ) {
-        return;
-    }
-    
-    flags.release_invoked = true;
-    lock.unlock();
-    cv.notify_all();
-    
-    if ( dec_thread && dec_thread->joinable() ) {
-        dec_thread->join();
-    }
-    
-    if ( pkt_queue ) {
-        delete pkt_queue;
-    }
-    
     if ( audio_decoder ) {
         delete audio_decoder;
     }
@@ -115,124 +26,60 @@ void AudioDecoder::stop() {
         delete filter_graph;
     }
     
+    if ( pkt ) {
+        av_packet_free(&pkt);
+    }
+    
+    if ( dec_frame ) {
+        av_frame_free(&dec_frame);
+    }
+    
+    if ( filt_frame ) {
+        av_frame_free(&filt_frame);
+    }
+    
     if ( buf_src_params ) {
         av_free(buf_src_params);
     }
 }
 
-void AudioDecoder::setSampleBufferFull(bool is_full) {
-    is_sample_buffer_full.store(is_full);
-    cv.notify_all();
-}
-
-void AudioDecoder::setDecodeFrameCallback(AudioDecoder::DecodeFrameCallback callback) {
-    decode_frame_callback = callback;
-}
-
-void AudioDecoder::setPopPacketCallback(AudioDecoder::PopPacketCallback callback) {
-    pop_pkt_callback = callback;
-}
-
-void AudioDecoder::setErrorCallback(AudioDecoder::ErrorCallback callback) {
-    error_callback = callback;
-}
-
-void AudioDecoder::DecThread() {
-    int ret = 0;
-    AVPacket *pkt = av_packet_alloc();
-    AVFrame *dec_frame = av_frame_alloc();
-    AVFrame *filt_frame = av_frame_alloc();
-    bool should_exit;
-    bool error_occurred;
+int AudioDecoder::init(
+    AVCodecParameters* audio_stream_codecpar,
+    AVRational audio_stream_time_base,
+    AVSampleFormat output_sample_fmt, 
+    int output_sample_rate,
+    std::string output_ch_layout_desc
+) {
     
-    do {
-        should_exit = false;
-        error_occurred = false;
-        {
-            // wait conditions
-            std::unique_lock<std::mutex> lock(mtx);
-            cv.wait(lock, [&] { 
-                if ( flags.has_error || flags.release_invoked ) {
-                    return true;
-                }
-                
-                if ( flags.is_dec_eof ) {
-                    return false;
-                }
-                
-                if ( is_sample_buffer_full.load() ) {
-                    return false;
-                }
-                
-                // 判断是否有可解码的 pkt 或 read eof;
-                return pkt_queue->getCount() > 0 || flags.is_read_eof;
-            });
-            
-            if ( flags.has_error || flags.release_invoked ) {
-                should_exit = true;
-            }
-            // dec pkt
-            else if ( pkt_queue->pop(pkt) ) {
-                ret = AudioUtils::send_pkt(pkt, audio_decoder, dec_frame, filter_graph, FILTER_BUFFER_SRC_NAME);
-                if ( ret >= 0 ) {
-                    ret = AudioUtils::get_frames(filter_graph, FILTER_BUFFER_SINK_NAME, filt_frame, [&](AVFrame *frame) {
-                        if ( decode_frame_callback ) decode_frame_callback(this, frame);
-                    });
-                }
-                
-                // error
-                if ( ret < 0 && ret != AVERROR(EAGAIN) ) {
-                    error_occurred = true;
-                    flags.has_error = true;
-                    lock.unlock();
-                    if ( error_callback ) error_callback(this, ret);
-                }
-                else {
-                    lock.unlock();
-                    if ( pop_pkt_callback ) pop_pkt_callback(this, pkt);
-                }
-                
-                av_packet_unref(pkt);
-            }
-            // read eof
-            else if ( flags.is_read_eof ) {
-#ifdef DEBUG
-                client_print_message3("AAAA: dec eof, fifo size: %ld", audio_fifo->getSize());
-#endif
-                ret = AudioUtils::send_pkt(nullptr, audio_decoder, dec_frame, filter_graph, FILTER_BUFFER_SRC_NAME);
-                if ( ret >= 0 ) {
-                    ret = AudioUtils::get_frames(filter_graph, FILTER_BUFFER_SINK_NAME, filt_frame, [&](AVFrame *frame) {
-                        if ( decode_frame_callback ) decode_frame_callback(this, frame);
-                    });
-                }
-                
-                // dec eof
-                if ( ret == AVERROR_EOF ) {
-                    flags.is_dec_eof = true;
-                    if ( decode_frame_callback ) decode_frame_callback(this, nullptr);
-                }
-                else if ( ret < 0 ) {
-                    error_occurred = true;
-                    flags.has_error = true;
-                    lock.unlock();
-                    if ( error_callback ) error_callback(this, ret);
-                }
-            }
-        }
-        
-        if ( should_exit || error_occurred ) {
-            goto exit_thread;
-        }
-    } while (true);
+    this->output_sample_fmt = output_sample_fmt;
+    this->output_sample_rate = output_sample_rate;
+    this->output_ch_layout_desc = output_ch_layout_desc;
     
-exit_thread:
-    av_packet_free(&pkt);
-    av_frame_free(&dec_frame);
-    av_frame_free(&filt_frame);
+    int ret = initAudioDecoder(audio_stream_codecpar);
+    if ( ret < 0 ) {
+        return ret;
+    }
     
-#ifdef DEBUG
-    client_print_message3("AAAA: dec thread exit");
-#endif
+    buf_src_params = audio_decoder->createBufferSrcParameters(audio_stream_time_base);
+    ret = resetFilterGraph();
+    if ( ret < 0 ) {
+        return ret;
+    }
+    
+    pkt = av_packet_alloc();
+    dec_frame = av_frame_alloc();
+    filt_frame = av_frame_alloc();
+    return 0;
+}
+
+int AudioDecoder::decode(AVPacket* pkt, AudioFifo* fifo, bool should_flush) {
+    if ( should_flush ) {
+        audio_decoder->flush();
+        resetFilterGraph();
+        fifo->clear();
+    }
+    
+    return AudioUtils::transcode(pkt, audio_decoder, dec_frame, filter_graph, filt_frame, FILTER_BUFFER_SRC_NAME, FILTER_BUFFER_SINK_NAME, fifo);
 }
 
 int AudioDecoder::initAudioDecoder(AVCodecParameters* codecpar) {

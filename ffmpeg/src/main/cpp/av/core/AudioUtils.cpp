@@ -42,41 +42,6 @@ int AudioUtils::transcode(
     return process_decoded_frames(decoder, dec_frame, filter_graph, filt_frame, buf_src_name, buf_sink_name, fifo);
 }
 
-int AudioUtils::send_pkt(
-    AVPacket* _Nullable pkt,
-    MediaDecoder* _Nonnull decoder, 
-    AVFrame* _Nonnull dec_frame,
-    FilterGraph* _Nonnull filter_graph,
-    const std::string& buf_src_name
-) {
-    int ret = decoder->send(pkt);
-    if ( ret < 0 ) {
-        return ret;
-    }
-
-    return filter_add_dec_frames(decoder, dec_frame, filter_graph, buf_src_name);
-}
-
-using GetFrameCallback = std::function<void(AVFrame* filt_frame)>;
-int AudioUtils::get_frames(
-    FilterGraph* _Nonnull filter_graph,
-    const std::string& buf_sink_name,
-    AVFrame* _Nonnull filt_frame,
-    GetFrameCallback callback
-) {
-    int ret = 0;
-    do {
-        ret = filter_graph->getFrame(buf_sink_name, filt_frame);
-        if ( ret < 0 ) {
-            break;
-        }
-        callback(filt_frame);
-        av_frame_unref(filt_frame);
-    } while (ret >= 0);
-    return ret;
-}
-
-
 int AudioUtils::process_decoded_frames(
     MediaDecoder* _Nonnull decoder, 
     AVFrame* _Nonnull dec_frame,
@@ -137,41 +102,5 @@ int AudioUtils::transfer_filtered_frames(
     } while (ret >= 0);
     return ret;
 }
-
-
     
-int AudioUtils::filter_add_dec_frames(
-    MediaDecoder* _Nonnull decoder, 
-    AVFrame* _Nonnull dec_frame,
-    FilterGraph* _Nonnull filter_graph,
-    const std::string& buf_src_name
-) {
-    int ret = 0;
-    do {
-        ret = decoder->receive(dec_frame);
-        if ( ret == AVERROR_EOF ) {
-            ret = filter_add_dec_frame(NULL, filter_graph, buf_src_name);
-            break;
-        }
-    
-        if ( ret < 0 ) {
-            break;
-        }
-        
-        ret = filter_add_dec_frame(dec_frame, filter_graph, buf_src_name);
-        av_frame_unref(dec_frame);
-    } while(ret >= 0);
-    return ret;
-}
-
-int AudioUtils::filter_add_dec_frame(
-    AVFrame* _Nullable frame,
-    FilterGraph* _Nonnull filter_graph,
-    const std::string& buf_src_name
-) {
-    int flags = frame != nullptr ? AV_BUFFERSRC_FLAG_KEEP_REF : AV_BUFFERSRC_FLAG_PUSH;
-    int ret = filter_graph->addFrame(buf_src_name, frame, flags);
-    return ret;
-}
-
 }
