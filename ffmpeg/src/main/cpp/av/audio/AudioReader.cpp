@@ -27,6 +27,17 @@ void AudioReader::prepare() {
     read_thread = std::make_unique<std::thread>(&AudioReader::ReadThread, this);
 }
 
+void AudioReader::start() {
+    std::unique_lock<std::mutex> lock(mtx);
+    if ( flags.is_started || flags.has_error || flags.release_invoked ) {
+        return;
+    }
+    
+    flags.is_started = true;
+    lock.unlock();
+    cv.notify_all();
+}
+
 void AudioReader::seek(int64_t time_pos_ms) {
     std::unique_lock<std::mutex> lock(mtx);
     if ( flags.has_error || flags.release_invoked ) {
@@ -85,55 +96,67 @@ void AudioReader::setPacketBufferFull(bool is_full) {
     cv.notify_all();
 }
 
-void AudioReader::setReadPacketCallback(ReadPacketCallback callback) {
+void AudioReader::setReadyToReadPacketCallback(AudioReader::ReadyToReadPacketCallback callback) {
+    ready_to_read_pkt_callback = callback;
+}
+
+void AudioReader::setReadPacketCallback(AudioReader::ReadPacketCallback callback) {
     read_pkt_callback = callback;
+}
+
+void AudioReader::setErrorCallback(AudioReader::ErrorCallback callback) {
+    error_callback = callback;
 }
 
 void AudioReader::ReadThread() {
     int ret = 0;
-    std::unique_lock<std::mutex> lock(mtx);
-    if ( flags.release_invoked ) {
-        return;
-    }
-    
-    // init reader
-    audio_reader = new MediaReader();
-    lock.unlock();
-    ret = audio_reader->open(url); // thread blocked;
-    
-    // re_lock
-    lock.lock();
-    if ( flags.release_invoked ) {
-        return;
-    }
-    
-    if ( ret < 0 ) {
-        flags.has_error = true;
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        if ( flags.release_invoked ) {
+            return;
+        }
+        
+        // init reader
+        audio_reader = new MediaReader();
         lock.unlock();
-        if ( error_callback ) error_callback(this, ret);
-        return;
-    }
-    
-    AVStream* audio_stream = audio_reader->getBestStream(AVMEDIA_TYPE_AUDIO);
-    if ( audio_stream == nullptr ) {
-        ret = AVERROR_STREAM_NOT_FOUND;
-        flags.has_error = true;
+        ret = audio_reader->open(url); // thread blocked;
+        
+        // re_lock
+        lock.lock();
+        if ( flags.release_invoked ) {
+            return;
+        }
+        
+        if ( ret < 0 ) {
+            flags.has_error = true;
+            lock.unlock();
+            if ( error_callback ) error_callback(this, ret);
+            return;
+        }
+        
+        AVStream* audio_stream = audio_reader->getBestStream(AVMEDIA_TYPE_AUDIO);
+        if ( audio_stream == nullptr ) {
+            ret = AVERROR_STREAM_NOT_FOUND;
+            flags.has_error = true;
+            lock.unlock();
+            if ( error_callback ) error_callback(this, ret);
+            return;
+        }
+        
+        audio_stream_index = audio_stream->index;
+        audio_stream_time_base = audio_stream->time_base;
+        audio_stream_duration_ms = av_rescale_q(audio_stream->duration, audio_stream_time_base, (AVRational){ 1, 1000 });
+        
+        if ( start_time_pos_ms != 0 ) {
+            flags.wants_seek = true;
+            req_seek_time = av_rescale_q(start_time_pos_ms, (AVRational){ 1, 1000 }, AV_TIME_BASE_Q);
+        }
+        
+        // init successful
+        flags.init_successful = true;
         lock.unlock();
-        if ( error_callback ) error_callback(this, ret);
-        return;
+        if ( ready_to_read_pkt_callback ) ready_to_read_pkt_callback(this, audio_stream);
     }
-    
-    audio_stream_index = audio_stream->index;
-    audio_stream_time_base = audio_stream->time_base;
-    audio_stream_duration_ms = av_rescale_q(audio_stream->duration, audio_stream_time_base, (AVRational){ 1, 1000 });
-    
-    if ( start_time_pos_ms != 0 ) {
-        flags.wants_seek = true;
-        req_seek_time = av_rescale_q(start_time_pos_ms, (AVRational){ 1, 1000 }, AV_TIME_BASE_Q);
-    }
-    
-    // init successful
-    flags.init_successful = true;
     
     // begin read pkts
     
@@ -158,6 +181,10 @@ restart:
             cv.wait(lock, [&] { 
                 if ( flags.has_error || flags.release_invoked ) {
                     return true;
+                }
+                
+                if ( !flags.is_started ) {
+                    return false;
                 }
                 
                 if ( flags.wants_seek ) {
