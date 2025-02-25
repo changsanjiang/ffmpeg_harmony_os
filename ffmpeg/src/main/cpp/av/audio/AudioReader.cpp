@@ -148,7 +148,7 @@ void AudioReader::ReadThread() {
         audio_stream_time_base = audio_stream->time_base;
         audio_stream_duration_ms = av_rescale_q(audio_stream->duration, audio_stream_time_base, (AVRational){ 1, 1000 });
         
-        if ( start_time_pos_ms != 0 ) {
+        if ( start_time_pos_ms > 0 ) {
             flags.wants_seek = true;
             req_seek_time = av_rescale_q(start_time_pos_ms, (AVRational){ 1, 1000 }, AV_TIME_BASE_Q);
         }
