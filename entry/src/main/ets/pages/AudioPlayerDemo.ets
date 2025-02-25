@@ -212,7 +212,7 @@ struct AudioPlayerDemo {
       }
     });
     player.on('playableDurationChange', (playableDuration) => {
-      console.log(`bufferTime: ${playableDuration}`);
+      // console.log(`bufferTime: ${playableDuration}`);
     });
     player.on('errorChange', (error) => {
       if ( error ) {

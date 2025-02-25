@@ -31,6 +31,8 @@ namespace FFAV {
 
 class AudioUtils {
 public:
+    using FilterFrameCallback = std::function<void(AVFrame* filt_frame)>;
+    
     static int transcode(
         AVPacket* _Nullable pkt,
         MediaDecoder* _Nonnull decoder, 
@@ -39,7 +41,7 @@ public:
         AVFrame* _Nonnull filt_frame,
         const std::string& buf_src_name,
         const std::string& buf_sink_name,
-        AudioFifo* _Nonnull fifo
+        FilterFrameCallback callback
     );
 
 private:
@@ -50,7 +52,7 @@ private:
         AVFrame* _Nonnull filt_frame,
         const std::string& buf_src_name,
         const std::string& buf_sink_name,
-        AudioFifo* _Nonnull fifo
+        FilterFrameCallback callback
     );
     
     static int process_filter_frame(
@@ -59,14 +61,14 @@ private:
         AVFrame* _Nonnull filt_frame,
         const std::string& buf_src_name,
         const std::string& buf_sink_name,
-        AudioFifo* _Nonnull fifo
+        FilterFrameCallback callback
     );
     
     static int transfer_filtered_frames(
         FilterGraph* _Nonnull filter_graph,
         AVFrame* _Nonnull filt_frame,
         const std::string& buf_sink_name,
-        AudioFifo* _Nonnull fifo
+        FilterFrameCallback callback
     );
 };
 

@@ -74,13 +74,17 @@ int AudioDecoder::init(
     return 0;
 }
 
-int AudioDecoder::decode(AVPacket* pkt, AudioFifo* fifo) {
-    return AudioUtils::transcode(pkt, audio_decoder, dec_frame, filter_graph, filt_frame, FILTER_BUFFER_SRC_NAME, FILTER_BUFFER_SINK_NAME, fifo);
+int AudioDecoder::decode(AVPacket* pkt, AudioDecoder::DecodeFrameCallback callback) {
+    if ( is_cleared ) is_cleared = false;
+    return AudioUtils::transcode(pkt, audio_decoder, dec_frame, filter_graph, filt_frame, FILTER_BUFFER_SRC_NAME, FILTER_BUFFER_SINK_NAME, callback);
 }
 
 void AudioDecoder::flush() {
-    audio_decoder->flush();
-    resetFilterGraph();
+    if ( !is_cleared ) {
+        is_cleared = true;
+        audio_decoder->flush();
+        resetFilterGraph();
+    }
 }
 
 AVSampleFormat AudioDecoder::getOutputSampleFormat() {

@@ -25,7 +25,9 @@ public:
         AVRational audio_stream_time_base,
         AVSampleFormat output_sample_fmt
     );
-    int decode(AVPacket* pkt, AudioFifo* fifo);
+    
+    using DecodeFrameCallback = std::function<void(AVFrame* frame)>;
+    int decode(AVPacket* pkt, DecodeFrameCallback callback);
     void flush();
     
     AVSampleFormat getOutputSampleFormat();
@@ -44,6 +46,8 @@ private:
     AVPacket *pkt { nullptr };
     AVFrame *dec_frame { nullptr };
     AVFrame *filt_frame { nullptr };
+    
+    bool is_cleared { true };
     
     int initAudioDecoder(AVCodecParameters* codecpar);
     int initFilterGraph(

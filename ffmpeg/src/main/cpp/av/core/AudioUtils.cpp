@@ -32,14 +32,14 @@ int AudioUtils::transcode(
     AVFrame* _Nonnull filt_frame,
     const std::string& buf_src_name,
     const std::string& buf_sink_name,
-    AudioFifo* _Nonnull fifo
+    FilterFrameCallback callback
 ) {
     int ret = decoder->send(pkt);
     if ( ret < 0 ) {
         return ret;
     }
         
-    return process_decoded_frames(decoder, dec_frame, filter_graph, filt_frame, buf_src_name, buf_sink_name, fifo);
+    return process_decoded_frames(decoder, dec_frame, filter_graph, filt_frame, buf_src_name, buf_sink_name, callback);
 }
 
 int AudioUtils::process_decoded_frames(
@@ -49,13 +49,13 @@ int AudioUtils::process_decoded_frames(
     AVFrame* _Nonnull filt_frame,
     const std::string& buf_src_name,
     const std::string& buf_sink_name,
-    AudioFifo* _Nonnull fifo
+    FilterFrameCallback callback
 ) {
     int ret = 0;
     do {
         ret = decoder->receive(dec_frame);
         if ( ret == AVERROR_EOF ) {
-            ret = process_filter_frame(NULL, filter_graph, filt_frame, buf_src_name, buf_sink_name, fifo);
+            ret = process_filter_frame(NULL, filter_graph, filt_frame, buf_src_name, buf_sink_name, callback);
             break;
         }
     
@@ -63,7 +63,7 @@ int AudioUtils::process_decoded_frames(
             break;
         }
         
-        ret = process_filter_frame(dec_frame, filter_graph, filt_frame, buf_src_name, buf_sink_name, fifo);
+        ret = process_filter_frame(dec_frame, filter_graph, filt_frame, buf_src_name, buf_sink_name, callback);
         av_frame_unref(dec_frame);
     } while(ret >= 0);
     return ret;
@@ -75,21 +75,21 @@ int AudioUtils::process_filter_frame(
     AVFrame* _Nonnull filt_frame,
     const std::string& buf_src_name,
     const std::string& buf_sink_name,
-    AudioFifo* _Nonnull fifo
+    FilterFrameCallback callback
 ) {
     int flags = frame != nullptr ? AV_BUFFERSRC_FLAG_KEEP_REF : AV_BUFFERSRC_FLAG_PUSH;
     int ret = filter_graph->addFrame(buf_src_name, frame, flags);
     if ( ret < 0 ) {
         return ret;
     }  
-    return transfer_filtered_frames(filter_graph, filt_frame, buf_sink_name, fifo);
+    return transfer_filtered_frames(filter_graph, filt_frame, buf_sink_name, callback);
 }
 
 int AudioUtils::transfer_filtered_frames(
     FilterGraph* _Nonnull filter_graph,
     AVFrame* _Nonnull filt_frame,
     const std::string& buf_sink_name,
-    AudioFifo* _Nonnull fifo
+    FilterFrameCallback callback
 ) {
     int ret = 0;
     do {
@@ -97,7 +97,7 @@ int AudioUtils::transfer_filtered_frames(
         if ( ret < 0 ) {
             break;
         }
-        ret = fifo->write((void **)filt_frame->data, filt_frame->nb_samples, filt_frame->pts);
+        callback(filt_frame); // callback
         av_frame_unref(filt_frame);
     } while (ret >= 0);
     return ret;

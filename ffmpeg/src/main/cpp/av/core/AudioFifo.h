@@ -23,6 +23,7 @@
 #ifndef FFMPEGPROJ_AUDIOFIFO_H
 #define FFMPEGPROJ_AUDIOFIFO_H
 
+#include <stdint.h>
 extern "C" {
 #include "libavcodec/avcodec.h"
 #include "libavutil/audio_fifo.h"
@@ -46,6 +47,7 @@ public:
     
     int getNumberOfSamples();  
     int64_t getNextPts();
+    int64_t getEndPts();
 
 private:
     AVAudioFifo* fifo = nullptr;        

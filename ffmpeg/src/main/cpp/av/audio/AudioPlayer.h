@@ -12,6 +12,8 @@
 #include "av/audio/EventMessageQueue.h"
 #include "av/core/AudioRenderer.h"
 #include "av/core/PacketQueue.h"
+#include "av/utils/TaskScheduler.h"
+#include <stdint.h>
 #include <thread>
 #include <memory>
 
@@ -19,7 +21,7 @@ namespace FFAV {
 
 class AudioPlayer {
     public:
-    AudioPlayer(const std::string& url, int64_t start_time_position_ms);
+    AudioPlayer(const std::string& url, int64_t start_time_position_ms = 0);
     ~AudioPlayer();
 
     void prepare();
@@ -36,7 +38,7 @@ class AudioPlayer {
     
 private:
     const std::string url;
-    int64_t start_time_position_ms;
+    const int64_t start_time_position_ms;
     
     AudioReader* audio_reader { nullptr };
     AudioDecoder* audio_decoder { nullptr };
@@ -68,6 +70,8 @@ private:
     int output_nb_channels;
     int output_nb_bytes_per_sample;
     
+    std::shared_ptr<TaskScheduler> recreate_reader_task { nullptr };
+    
     struct {
         unsigned init_successful :1;
         unsigned prepare_invoked :1;
@@ -83,6 +87,9 @@ private:
         unsigned is_play_immediate :1;
         unsigned is_playing :1;
         unsigned is_playback_ended :1;
+        
+        unsigned should_recreate_reader :1;
+        unsigned should_align_pts :1;
     } flags = { 0 };
     
     
@@ -92,6 +99,8 @@ private:
     
     void DecThread();
     
+    void recreateReader(int64_t start_time_position_ms);
+    void flush();
     void onFFmpegError(int ff_err);
     void onRenderError(OH_AudioStream_Result render_err);
     void onError(std::shared_ptr<Error> error);

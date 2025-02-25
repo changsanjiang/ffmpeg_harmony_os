@@ -22,6 +22,7 @@
 
 #include "AudioFifo.h"
 #include <stdexcept>
+#include <stdint.h>
 
 namespace FFAV {
 
@@ -77,6 +78,13 @@ int AudioFifo::getNumberOfSamples() {
 
 int64_t AudioFifo::getNextPts() {
     return next_pts;
+}
+
+int64_t AudioFifo::getEndPts() {
+    if ( next_pts != AV_NOPTS_VALUE ) {
+        return next_pts + getNumberOfSamples();
+    }
+    return AV_NOPTS_VALUE;
 }
 
 void AudioFifo::release() {
