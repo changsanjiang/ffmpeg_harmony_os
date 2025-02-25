@@ -20,12 +20,16 @@ public:
     ~AudioReader();
     
     void prepare();
+    void start();
     void seek(int64_t time_pos_ms);
     void stop();
     
     // 设置缓冲是否已满;
     // 当缓冲已满时将会暂停读取;
     void setPacketBufferFull(bool is_full);
+    
+    using ReadyToReadPacketCallback = std::function<void(AudioReader* reader, AVStream* stream)>;
+    void setReadyToReadPacketCallback(ReadyToReadPacketCallback callback);
     
     // seek 之后， read pkt 之前 Queue中的数据都可以使用
     // read pkt 之后(should_flush == true)， queue 中的数据需要清空， 用来存放新位置的 pkt;
@@ -54,6 +58,7 @@ private:
     int64_t req_seek_time; // in base q;
     int64_t seeking_time { AV_NOPTS_VALUE }; // in base q; current seek time; 
     
+    ReadyToReadPacketCallback ready_to_read_pkt_callback { nullptr };
     ReadPacketCallback read_pkt_callback { nullptr };
     ErrorCallback error_callback { nullptr };
 
@@ -63,6 +68,7 @@ private:
         unsigned int prepare_invoked :1;
         unsigned int has_error :1;
 
+        unsigned int is_started :1;
         unsigned int wants_seek :1;
         unsigned int is_read_eof :1;
     } flags { 0 };
