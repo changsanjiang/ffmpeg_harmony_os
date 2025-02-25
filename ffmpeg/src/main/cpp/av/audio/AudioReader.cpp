@@ -5,6 +5,7 @@
 // please include "napi/native_api.h".
 
 #include "AudioReader.h"
+#include "extension/client_print.h"
 #include <stdint.h>
 
 namespace FFAV {
@@ -157,6 +158,8 @@ void AudioReader::ReadThread() {
         lock.unlock();
         if ( ready_to_read_pkt_callback ) ready_to_read_pkt_callback(this, audio_stream);
     }
+    
+    client_print_message3("AAAA: AudioReader:BeginReadPkts");
     
     // begin read pkts
     

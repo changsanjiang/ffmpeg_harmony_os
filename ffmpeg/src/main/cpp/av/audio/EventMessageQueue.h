@@ -33,7 +33,6 @@ private:
     std::queue<std::shared_ptr<EventMessage>> msg_queue;
     bool is_running = true;
     
-    void startEventThreadIfNeeded();
     void ProcessQueue();
 };
 
