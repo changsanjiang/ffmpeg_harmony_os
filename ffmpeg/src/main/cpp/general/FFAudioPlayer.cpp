@@ -561,6 +561,7 @@ bool FFAudioPlayer::createPlayer() {
 void FFAudioPlayer::prepare() {
     if ( createPlayer() ) {
         player->prepare();
+        if ( this->play_when_ready.load() ) player->play();
     }
 }
 
