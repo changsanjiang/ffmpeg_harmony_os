@@ -8,6 +8,7 @@
 #include "extension/client_print.h"
 #include <cerrno>
 #include <stdint.h>
+#include <thread>
 
 namespace FFAV {
 
@@ -88,6 +89,7 @@ void AudioPlayer::seek(int64_t time_pos_ms) {
         if ( recreate_reader_task && !recreate_reader_task->tryCancelTask() ) {
             return;
         }
+        flags.should_align_pts = false;
         // 清空缓存并重新创建reader;
         flush();
         recreateReader(time_pos_ms);
@@ -155,7 +157,8 @@ void AudioPlayer::onReaderReadyToReadCallback(AudioReader* reader, AVStream* str
     // 为什么添加 flags.init_successful 的判断
     // 因为 recreate reader 时会重新进这里, 以下初始化代码无需再次执行, 直接return即可;
     if ( flags.init_successful ) {
-#warning next ...
+        flush();
+        reader->start();
         return;
     }
     
@@ -218,13 +221,9 @@ void AudioPlayer::onReaderReadyToReadCallback(AudioReader* reader, AVStream* str
     
     // start read pkt
     reader->start();
-    
-    client_print_message3("AAAA: AudioPlayer::onReaderReadyToReadCallback: after");
 }
 
 void AudioPlayer::onReaderReadPacketCallback(AudioReader* reader, AVPacket* pkt, bool should_flush) {
-    client_print_message3("AAAA: AudioPlayer::onReaderReadPacketCallback: pts: %lld", pkt ? pkt->pts : -1);
-    
     std::unique_lock<std::mutex> lock(mtx);
     if ( flags.has_error || flags.release_invoked ) {
         return;
@@ -268,7 +267,7 @@ void AudioPlayer::onReaderErrorCallback(AudioReader* reader, int ff_err) {
             if ( flags.has_error || flags.release_invoked ) {
                 return;
             }
-            
+
             // 如果之前未完成初始化, 则直接重新创建 reader 即可;
             // 如果已完成初始化, 则需要考虑读取的开始位置;
             // - 等待期间用户可能调用seek, 需要从seek的位置开始播放(模糊位置)
@@ -277,7 +276,7 @@ void AudioPlayer::onReaderErrorCallback(AudioReader* reader, int ff_err) {
                 recreateReader(start_time_position_ms);
                 return;
             }
-            
+
             // 如果等待期间用户执行了 seek 操作, 则 recreate_reader_task 会被取消;
             // 这里仅需考虑从当前位置恢复读取即可;
             // 从当前fifo的位置进行恢复, 新的解码数据需要对齐fifo后才能添加到fifo中;
@@ -286,18 +285,15 @@ void AudioPlayer::onReaderErrorCallback(AudioReader* reader, int ff_err) {
                 pts = 0;  
             }
 
-            // clear buffers
-            pkt_queue->clear();
-            audio_decoder->flush();
-            
-            // reset flags 
-            flags.is_read_eof = false;
-            flags.should_align_pts = true; // 解码数据需要对齐到当前 fifo 的尾部;
-            
+            // 解码数据需要对齐到当前 fifo 的尾部;
+            flags.should_align_pts = true; 
+
             int64_t pts_ms = av_rescale_q(pts, output_time_base, (AVRational){ 1, 1000 });
             recreateReader(pts_ms);
             recreate_reader_task = nullptr;
         }, 2);
+        
+        client_print_message3("AudioPlayer::onReaderErrorCallback after");
         return;
     }
     
@@ -346,35 +342,22 @@ void AudioPlayer::DecThread() {
                     next_pkt = pkt;
                 }
                 
-                ret = audio_decoder->decode(next_pkt, [&](AVFrame* filt_frame) {
-                    int64_t aligned_pts = audio_fifo->getEndPts();
+                ret = audio_decoder->decode(next_pkt, [&](AVFrame* filt_frame) {                     
+                    int64_t aligned_pts = audio_fifo->getEndPts() != AV_NOPTS_VALUE ? audio_fifo->getEndPts() : AV_NOPTS_VALUE;
                     int64_t start_pts = filt_frame->pts;
+                    if ( flags.should_align_pts && aligned_pts != AV_NOPTS_VALUE ) {
+                        if ( start_pts < aligned_pts ) {
+                            return;
+                        }    
+                        flags.should_align_pts = false;
+                    }
+                    
                     if ( !flags.should_align_pts || aligned_pts == AV_NOPTS_VALUE || aligned_pts == start_pts ) {
                         audio_fifo->write((void **)filt_frame->data, filt_frame->nb_samples, filt_frame->pts);
                         return;
                     }
-                    
-                    if ( start_pts > aligned_pts ) {
-                        ret = AVERROR_BUG2;
-                        return;
-                    }
-
-                    int64_t end_pts = start_pts + filt_frame->nb_samples;
-                    if ( aligned_pts > end_pts ) {
-                        return;
-                    }
-                    
-                    AudioFifo* temp = new AudioFifo();
-                    temp->init(OUTPUT_SAMPLE_FORMAT, output_nb_channels, filt_frame->nb_samples);
-                    int64_t nb_samples = aligned_pts - start_pts;
-                    uint8_t* data = new uint8_t(nb_samples * av_get_bytes_per_sample(OUTPUT_SAMPLE_FORMAT));
-                    temp->read((void **)&data, nb_samples, nullptr);
-                    
-#warning next ...
                 });
-#ifdef DEBUG
-                client_print_message3("AAAA: dec pkt: pts=%ld, fifo size: %ld", pkt->pts, audio_fifo->getSize());
-#endif
+                
                 if ( next_pkt ) {
                     av_packet_unref(next_pkt);
                     audio_reader->setPacketBufferFull(pkt_queue->getSize() >= pkt_size_threshold);
@@ -555,6 +538,11 @@ void AudioPlayer::onOutputDeviceChangeCallback(OH_AudioStream_DeviceChangeReason
 }
 
 void AudioPlayer::recreateReader(int64_t start_time_position_ms) {
+    client_print_message3("AAAA: AudioPlayer::recreateReader(%lld)", start_time_position_ms);
+    if ( audio_reader ) {
+        delete audio_reader;
+    }
+    
     flags.should_recreate_reader = false;
     audio_reader = new AudioReader(url, start_time_position_ms);
     audio_reader->setReadyToReadPacketCallback(std::bind(&AudioPlayer::onReaderReadyToReadCallback, this, std::placeholders::_1, std::placeholders::_2));
@@ -564,19 +552,27 @@ void AudioPlayer::recreateReader(int64_t start_time_position_ms) {
 }
 
 void AudioPlayer::flush() {
-    // clear buffers
-    pkt_queue->clear();
-    audio_decoder->flush();
-    audio_fifo->clear();
-    if ( !flags.is_playing ) audio_renderer->flush();
-    
-    // reset flags
-    flags.is_read_eof = false;
-    flags.is_dec_eof = false;
-    flags.is_render_eof = false;
-    flags.is_playback_ended = false;
-    flags.should_reset_current_time = true;
-    flags.should_align_pts = false;
+    if ( !flags.should_align_pts ) {
+        // clear buffers
+        pkt_queue->clear();
+        audio_decoder->flush();
+        audio_fifo->clear();
+        if ( !flags.is_playing ) audio_renderer->flush();
+        
+        // reset flags
+        flags.is_read_eof = false;
+        flags.is_dec_eof = false;
+        flags.is_render_eof = false;
+        flags.is_playback_ended = false;
+        flags.should_reset_current_time = true;
+    }
+    else {
+        // clear buffers
+        pkt_queue->clear();
+        audio_decoder->flush();
+        // reset flags
+        flags.is_read_eof = false;
+    }
 }
 
 void AudioPlayer::onFFmpegError(int error) {

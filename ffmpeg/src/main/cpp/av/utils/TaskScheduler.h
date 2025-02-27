@@ -8,6 +8,7 @@
 #define FFMPEG_HARMONY_OS_TASKSCHEDULER_H
 
 #include <mutex>
+#include <future>
 
 namespace FFAV {
 
@@ -15,7 +16,7 @@ class TaskScheduler {
 public:
     // 延迟执行异步任务
     using Task = std::function<void()>;
-    static std::shared_ptr<TaskScheduler> scheduleTask(Task task, int delayInSeconds);
+    static std::shared_ptr<TaskScheduler> scheduleTask(Task task, int delay_in_seconds);
  
     // 尝试取消任务, 取消成功后返回 true, 如果任务已经开始或已经完成返回 false;
     bool tryCancelTask();
@@ -26,9 +27,13 @@ public:
 private:
     std::mutex mtx;
     std::condition_variable cv;
+    Task callback;
+    int delay_in_seconds;
+    std::future<void> future; // 当 std::future 对象被销毁时，它会自动等待关联的任务完成（如果任务尚未完成）。
     bool is_cancelled { false }; 
     bool has_started { false };
     bool has_finished { false };
+    void schedule();
 };
 
 }

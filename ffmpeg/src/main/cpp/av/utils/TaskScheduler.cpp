@@ -5,31 +5,15 @@
 // please include "napi/native_api.h".
 
 #include "TaskScheduler.h"
-
 #include <thread>
-#include <future>
 
 namespace FFAV {
-std::shared_ptr<TaskScheduler> TaskScheduler::scheduleTask(Task task, int delayInSeconds) {
-    auto scheduler = std::make_shared<TaskScheduler>();
-    std::async(std::launch::async, [scheduler, delayInSeconds, task] {
-        std::this_thread::sleep_for(std::chrono::seconds(delayInSeconds));  
-        {
-            std::lock_guard<std::mutex> lock(scheduler->mtx);
-            if ( scheduler->is_cancelled ) {
-                return;  
-            }
-            scheduler->has_started = true;
-        }
-    
-        task();  // 执行任务
-        
-        {
-            std::lock_guard<std::mutex> lock(scheduler->mtx);
-            scheduler->has_finished = true;  
-        }
-        scheduler->cv.notify_all();  
-    });
+
+std::shared_ptr<TaskScheduler> TaskScheduler::scheduleTask(Task task, int delay_in_seconds) {
+    std::shared_ptr<TaskScheduler> scheduler = std::make_shared<TaskScheduler>();
+    scheduler->callback = task;
+    scheduler->delay_in_seconds = delay_in_seconds;
+    scheduler->future = std::async(std::launch::async, std::bind(&TaskScheduler::schedule, scheduler));
     return scheduler;
 }
 
@@ -45,6 +29,25 @@ bool TaskScheduler::tryCancelTask() {
 void TaskScheduler::waitForCompletion() {
     std::unique_lock<std::mutex> lock(mtx);
     cv.wait(lock, [this] { return has_finished || is_cancelled; });
+}
+
+void TaskScheduler::schedule() {
+    std::this_thread::sleep_for(std::chrono::seconds(delay_in_seconds));  
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        if ( is_cancelled ) {
+            return;  
+        }
+        has_started = true;
+    }
+
+    callback();  // 执行任务
+    
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        has_finished = true;  
+    }
+    cv.notify_all();
 }
 
 }
