@@ -12,7 +12,6 @@
 #include "av/audio/EventMessageQueue.h"
 #include "av/core/AudioRenderer.h"
 #include "av/core/PacketQueue.h"
-#include "av/utils/TaskScheduler.h"
 #include <stdint.h>
 #include <thread>
 #include <memory>
@@ -50,12 +49,12 @@ private:
     std::condition_variable cv;
     std::unique_ptr<std::thread> dec_thread { nullptr };
     
-    int64_t duration_ms = 0;
-    int64_t current_time_ms = 0; // last_render_pts_ms
-    int64_t playable_duration_ms = 0; // last_pkt_pts_or_end_time_ms
+    int64_t duration_ms { 0 };
+    int64_t current_time_ms { 0 }; // last_render_pts_ms
+    int64_t playable_duration_ms { 0 }; // last_pkt_pts_or_end_time_ms
     
-    float volume = 1;
-    float speed = 1;
+    float volume { 1 };
+    float speed { 1 };
 
     int pkt_size_threshold { 5 * 1024 * 1024 }; // bytes; 5M;
     int render_frame_size;
@@ -69,8 +68,6 @@ private:
     AVRational output_time_base;
     int output_nb_channels;
     int output_nb_bytes_per_sample;
-    
-    std::shared_ptr<TaskScheduler> recreate_reader_task { nullptr };
     
     struct {
         unsigned init_successful :1;
@@ -87,9 +84,6 @@ private:
         unsigned is_play_immediate :1;
         unsigned is_playing :1;
         unsigned is_playback_ended :1;
-        
-        unsigned should_recreate_reader :1;
-        unsigned should_align_pts :1;
     } flags = { 0 };
     
     
@@ -99,7 +93,6 @@ private:
     
     void DecThread();
     
-    void recreateReader(int64_t start_time_position_ms);
     void flush();
     void onFFmpegError(int ff_err);
     void onRenderError(OH_AudioStream_Result render_err);
