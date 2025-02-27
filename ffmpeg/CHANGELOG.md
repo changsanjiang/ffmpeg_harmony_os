@@ -1,3 +1,6 @@
+#### [v1.1.4] 2025/02
+- 开启`libopencore-amrnb`和`libopencore-amrwb`, 用来编码和解码`AMR-NB`和`AMR-WB`音频;
+
 #### [v1.1.3] 2025/02
 - 开启`librubberband`, 用于支持`rubberband`滤镜;
 - 音乐播放器新增`startTimePosition`, 用于指定播放初始的位置;
