@@ -120,7 +120,7 @@
 static const char ffmpeg_program_name[] = "ffmpeg"; 
 static const int ffmpeg_program_birth_year = 2000;
 
-static FILE *vstats_file;
+static _Thread_local FILE *vstats_file;
 
 // optionally attached as opaque_ref to decoded AVFrames
 typedef struct FrameData {
@@ -344,10 +344,10 @@ void term_exit(void)
 
 static volatile int received_sigterm = 0;
 static volatile int received_nb_signals = 0;
-static atomic_int transcode_init_done = ATOMIC_VAR_INIT(0);
+//static atomic_int transcode_init_done = ATOMIC_VAR_INIT(0);
 // static volatile int ffmpeg_exited = 0;
 _Thread_local int main_return_code = 0;
-static int64_t copy_ts_first_pts = AV_NOPTS_VALUE;
+static _Thread_local int64_t copy_ts_first_pts = AV_NOPTS_VALUE;
 
 static void
 sigterm_handler(int sig)
@@ -590,12 +590,12 @@ void ffmpeg_cleanup(int ret)
 
     avformat_network_deinit();
 
-    if (received_sigterm) {
-        av_log(NULL, AV_LOG_INFO, "Exiting normally, received signal %d.\n",
-               (int) received_sigterm);
-    } else if (ret && atomic_load(&transcode_init_done)) {
-        av_log(NULL, AV_LOG_INFO, "Conversion failed!\n");
-    }
+//    if (received_sigterm) {
+//        av_log(NULL, AV_LOG_INFO, "Exiting normally, received signal %d.\n",
+//               (int) received_sigterm);
+//    } else if (ret && atomic_load(&transcode_init_done)) {
+//        av_log(NULL, AV_LOG_INFO, "Conversion failed!\n");
+//    }
     term_exit();
 //     ffmpeg_exited = 1;
     
@@ -3464,7 +3464,7 @@ static int transcode_init(void)
         return ret;
     }
 
-    atomic_store(&transcode_init_done, 1);
+//    atomic_store(&transcode_init_done, 1);
 
     return 0;
 }
