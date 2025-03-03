@@ -68,7 +68,12 @@ void AudioPlayer::prepare() {
 
 void AudioPlayer::play() {
     std::lock_guard<std::mutex> lock(mtx);
-    flags.is_play_immediate = true;
+    onPlay(PlayWhenReadyChangeReason::USER_REQUEST);
+}
+
+void AudioPlayer::playImmediately() {
+    std::lock_guard<std::mutex> lock(mtx);
+    flags.should_play_immediate = true;
     onPlay(PlayWhenReadyChangeReason::USER_REQUEST);
 }
 
@@ -195,8 +200,13 @@ void AudioPlayer::onReaderReadyToReadCallback(AudioReader* reader, AVStream* str
     // start read pkt
     reader->start();
     
-    // notify events
+    // init successful
     flags.init_successful = true;
+    if ( flags.play_when_ready ) {
+        startRenderer();
+    }
+    
+    // notify events
     onEvent(std::make_shared<DurationChangeEventMessage>(duration_ms));
 }
 
@@ -302,8 +312,6 @@ void AudioPlayer::DecThread() {
                         current_time_ms = av_rescale_q(audio_fifo->getNextPts(), output_time_base, (AVRational){ 1, 1000 });
                         onEvent(std::make_shared<CurrentTimeEventMessage>(current_time_ms));
                     }
-                    
-                    onEvaluate();
                 }
             }
         }
@@ -329,7 +337,7 @@ exit_thread:
 #endif
 }
 
-OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* audio_buffer, int audio_buffer_size_in_bytes) {
+OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* write_buffer, int write_buffer_size_in_bytes) {
     std::unique_lock<std::mutex> lock(mtx);
     if ( flags.release_invoked || flags.has_error ) {
         return AUDIO_DATA_CALLBACK_RESULT_INVALID;
@@ -347,18 +355,45 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* audi
         return AUDIO_DATA_CALLBACK_RESULT_INVALID;
     }
     
-    int nb_audio_buffer_samples = audio_buffer_size_in_bytes / output_nb_channels / output_nb_bytes_per_sample;
-    if ( audio_fifo->getNumberOfSamples() >= nb_audio_buffer_samples || flags.is_dec_eof ) {
+    int nb_write_buffer_samples = write_buffer_size_in_bytes / output_nb_channels / output_nb_bytes_per_sample;
+    int nb_fifo_samples = audio_fifo->getNumberOfSamples();
+    
+    // 缓冲不足
+    bool is_fifo_underflow = nb_fifo_samples < nb_write_buffer_samples;
+    // 是否应该播放到缓冲耗尽
+    bool should_drain_fifo = flags.should_drain_fifo;
+    // 是否需要尽快播放
+    // 当调用 playImmediately 或解码 eof 时直接播放
+    bool play_immediate = (flags.should_play_immediate && nb_fifo_samples >= render_frame_size) || flags.is_dec_eof;
+    // 是否能够尽可能的流畅播放
+    bool keep_up_likely = (nb_fifo_samples >= minimum_frame_threshold);
+    
+    // reset flags
+    if ( is_fifo_underflow && flags.should_drain_fifo ) {
+        flags.should_drain_fifo = false;
+    }
+    if ( flags.should_play_immediate ) {
+        flags.should_play_immediate = false;
+    }
+    
+    // 是否需要读取fifo写入播放
+    // 
+    bool should_read_fifo = !is_fifo_underflow && (should_drain_fifo || play_immediate || keep_up_likely);
+    if ( should_read_fifo ) {
+        if ( !should_drain_fifo ) {
+            flags.should_drain_fifo = true;
+        }    
+        
         int64_t pts;
-        int nb_read_samples = audio_fifo->read(&audio_buffer, nb_audio_buffer_samples, &pts);
+        int nb_read_samples = audio_fifo->read(&write_buffer, nb_write_buffer_samples, &pts);
         int64_t pts_ms = av_rescale_q(pts, output_time_base, (AVRational){ 1, 1000 });
         current_time_ms = pts_ms;
         onEvent(std::make_shared<CurrentTimeEventMessage>(pts_ms));
         
         if ( flags.is_dec_eof ) {
             int read_bytes = nb_read_samples * output_nb_channels * output_nb_bytes_per_sample;
-            if ( read_bytes < audio_buffer_size_in_bytes ) {
-                memset(static_cast<uint8_t*>(audio_buffer) + read_bytes, 0, audio_buffer_size_in_bytes - read_bytes);
+            if ( read_bytes < write_buffer_size_in_bytes ) {
+                memset(static_cast<uint8_t*>(write_buffer) + read_bytes, 0, write_buffer_size_in_bytes - read_bytes);
                 flags.is_render_eof = true;
             }
         }
@@ -367,7 +402,10 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* audi
         cv.notify_all(); // notify read
         return AUDIO_DATA_CALLBACK_RESULT_VALID;
     }
-    return AUDIO_DATA_CALLBACK_RESULT_INVALID;
+    
+    // set mute
+    memset(static_cast<uint8_t*>(write_buffer), 0, write_buffer_size_in_bytes);
+    return AUDIO_DATA_CALLBACK_RESULT_VALID;
 }
 
 void AudioPlayer::onRendererInterruptEventCallback(OH_AudioInterrupt_ForceType type, OH_AudioInterrupt_Hint hint) {
@@ -464,14 +502,15 @@ void AudioPlayer::flush() {
     pkt_queue->clear();
     audio_decoder->flush();
     audio_fifo->clear();
-    if ( !flags.is_playing ) audio_renderer->flush();
+    if ( !flags.is_renderer_running ) audio_renderer->flush();
     
     // reset flags
     flags.is_read_eof = false;
     flags.is_dec_eof = false;
     flags.is_render_eof = false;
     flags.is_playback_ended = false;
-    flags.should_reset_current_time = true; 
+    flags.should_reset_current_time = true;
+    flags.should_drain_fifo = false;
 }
 
 void AudioPlayer::onFFmpegError(int error) {
@@ -495,41 +534,13 @@ void AudioPlayer::onError(std::shared_ptr<Error> error) {
     flags.has_error = true;
     cur_error = error;
     
-    if ( flags.is_playing ) {
+    if ( flags.is_renderer_running ) {
         audio_renderer->stop();
-        flags.is_playing = false;
+        flags.is_renderer_running = false;
     }
     onEvent(std::make_shared<ErrorEventMessage>(error));
     lock.unlock();
     cv.notify_all();
-}
-
-void AudioPlayer::onEvaluate() {
-    if ( flags.is_playback_ended || !flags.play_when_ready || flags.has_error || flags.release_invoked ) {
-        return;
-    }
-    
-    bool keep_up_likely = (audio_fifo->getNumberOfSamples() >= minimum_frame_threshold) || flags.is_dec_eof;
-    bool play_immediate = (flags.is_play_immediate && audio_fifo->getNumberOfSamples() >= render_frame_size);
-
-#ifdef DEBUG
-    client_print_message3("keep_up_likely=%d, play_immediate=%d, minimum_frame_threshold=%d, render_size=%d, buffer_size=%d", keep_up_likely, play_immediate, minimum_frame_threshold, render_frame_size, audio_fifo->getNumberOfSamples());
-#endif
-    
-    if ( keep_up_likely || play_immediate ) {
-        flags.is_play_immediate = false;
-        if ( !flags.is_playing ) {
-            OH_AudioStream_Result ret = audio_renderer->play();
-            if ( ret == AUDIOSTREAM_SUCCESS ) flags.is_playing = true;
-        }
-    }
-    // 缓冲枯竭的时候先暂停 renderer, 等待缓冲足够时恢复播放
-    else if ( audio_fifo->getNumberOfSamples() < render_frame_size ) { 
-        if ( flags.is_playing ) {
-            OH_AudioStream_Result ret = audio_renderer->pause();
-            if ( ret == AUDIOSTREAM_SUCCESS ) flags.is_playing = false;
-        }
-    }
 }
 
 void AudioPlayer::onPlay(PlayWhenReadyChangeReason reason) {
@@ -545,8 +556,9 @@ void AudioPlayer::onPlay(PlayWhenReadyChangeReason reason) {
         if ( !flags.prepare_invoked ) {
             onPrepare();
         }
-        else if ( flags.init_successful ) {
-            onEvaluate();
+        
+        if ( flags.init_successful ) {
+            startRenderer();
         }
     }
     
@@ -564,12 +576,17 @@ void AudioPlayer::onPause(PlayWhenReadyChangeReason reason, bool should_invoke_p
     if ( flags.play_when_ready ) {
         flags.play_when_ready = false;
         
-        if ( flags.is_playing ) {
+        if ( flags.is_renderer_running ) {
             // 当被系统强制中断时 render 没有必要执行 pause, 外部可以传递该参数决定是否需要调用render的暂停;
             if ( should_invoke_pause ) {
-                audio_renderer->pause();
+              OH_AudioStream_Result render_ret = audio_renderer->pause();
+                if ( render_ret != AUDIOSTREAM_SUCCESS ) {
+                    onRenderError(render_ret);
+                    return;
+                }
             }
-            flags.is_playing = false;
+            
+            flags.is_renderer_running = false;
         }
     }
     
@@ -578,6 +595,15 @@ void AudioPlayer::onPause(PlayWhenReadyChangeReason reason, bool should_invoke_p
 
 void AudioPlayer::onEvent(std::shared_ptr<EventMessage> msg) {
     event_msg_queue->push(msg);
+}
+
+void AudioPlayer::startRenderer() {
+    OH_AudioStream_Result render_ret = audio_renderer->play();
+    if ( render_ret != AUDIOSTREAM_SUCCESS ) {
+        onRenderError(render_ret);
+        return;
+    }
+    flags.is_renderer_running = true;
 }
 
 }
