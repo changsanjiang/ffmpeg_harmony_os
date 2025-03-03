@@ -25,6 +25,7 @@ class AudioPlayer {
 
     void prepare();
     void play();
+    void playImmediately(); // 尽快播放
     void pause();
     void seek(int64_t time_pos_ms);
     
@@ -81,8 +82,9 @@ private:
         unsigned should_reset_current_time :1;
         
         unsigned play_when_ready :1;
-        unsigned is_play_immediate :1;
-        unsigned is_playing :1;
+        unsigned should_play_immediate :1;
+        unsigned is_renderer_running :1;
+        unsigned should_drain_fifo :1; 
         unsigned is_playback_ended :1;
     } flags = { 0 };
     
@@ -98,7 +100,6 @@ private:
     void onRenderError(OH_AudioStream_Result render_err);
     void onError(std::shared_ptr<Error> error);
     void onPrepare();
-    void onEvaluate();
     
     void onPlay(PlayWhenReadyChangeReason reason);
     void onPause(PlayWhenReadyChangeReason reason, bool should_invoke_pause = true);
@@ -109,6 +110,8 @@ private:
     void onRendererInterruptEventCallback(OH_AudioInterrupt_ForceType type, OH_AudioInterrupt_Hint hint);
     void onRendererErrorCallback(OH_AudioStream_Result error);
     void onOutputDeviceChangeCallback(OH_AudioStream_DeviceChangeReason reason);
+    
+    void startRenderer();
 };
 
 }
