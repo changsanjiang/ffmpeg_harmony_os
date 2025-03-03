@@ -31,7 +31,7 @@ namespace FFAV {
 
 class AudioUtils {
 public:
-    using FilterFrameCallback = std::function<void(AVFrame* filt_frame)>;
+    using FilterFrameCallback = std::function<int(AVFrame* filt_frame)>;
     
     static int transcode(
         AVPacket* _Nullable pkt,

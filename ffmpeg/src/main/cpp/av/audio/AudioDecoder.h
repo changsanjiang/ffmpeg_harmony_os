@@ -26,7 +26,7 @@ public:
         AVSampleFormat output_sample_fmt
     );
     
-    using DecodeFrameCallback = std::function<void(AVFrame* frame)>;
+    using DecodeFrameCallback = std::function<int(AVFrame* frame)>;
     int decode(AVPacket* pkt, DecodeFrameCallback callback);
     void flush();
     

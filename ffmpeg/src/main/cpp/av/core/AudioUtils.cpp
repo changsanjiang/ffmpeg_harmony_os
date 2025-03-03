@@ -92,12 +92,16 @@ int AudioUtils::transfer_filtered_frames(
     FilterFrameCallback callback
 ) {
     int ret = 0;
+    int callback_ret = 0;
     do {
         ret = filter_graph->getFrame(buf_sink_name, filt_frame);
         if ( ret < 0 ) {
             break;
         }
-        callback(filt_frame); // callback
+        callback_ret = callback(filt_frame); // callback
+        if ( callback_ret < 0 ) {
+            ret = callback_ret;
+        }
         av_frame_unref(filt_frame);
     } while (ret >= 0);
     return ret;
