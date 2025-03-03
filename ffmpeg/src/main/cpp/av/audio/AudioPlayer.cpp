@@ -389,7 +389,7 @@ void AudioPlayer::DecThread() {
                             // intersecting samples
                             int64_t nb_samples = end_pts - aligned_pts;
                             int pos_offset = (aligned_pts - start_pts) * output_nb_bytes_per_sample * output_nb_channels;
-                            uint8_t* data = *filt_frame->data;
+                            uint8_t* data = filt_frame->data[0];
                             data += pos_offset;
                             audio_fifo->write((void **)&data, nb_samples, aligned_pts);
                             flags.should_align_pts = false;
