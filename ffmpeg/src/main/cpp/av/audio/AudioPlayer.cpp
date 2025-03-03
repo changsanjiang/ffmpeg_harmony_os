@@ -313,7 +313,7 @@ void AudioPlayer::onReaderErrorCallback(AudioReader* reader, int ff_err) {
         if ( !flags.is_registered_network_status_change_callback ) {
             if ( network_status != NetworkStatus::AVAILABLE ) {
                 flags.is_registered_network_status_change_callback = true;
-                NetworkReachability::shared().addNetworkStatusChangeCallback(std::bind(&AudioPlayer::onNetworkStatusChange, this, std::placeholders::_1));
+                network_status_change_callback_id = NetworkReachability::shared().addNetworkStatusChangeCallback(std::bind(&AudioPlayer::onNetworkStatusChange, this, std::placeholders::_1));
                 return;
             }
         }
