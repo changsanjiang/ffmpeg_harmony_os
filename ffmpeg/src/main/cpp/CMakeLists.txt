@@ -22,6 +22,12 @@ target_include_directories(ffmpeg PRIVATE
 
 # napi
 target_link_libraries(ffmpeg PRIVATE libace_napi.z.so)
+# OHAudio
+target_link_libraries(ffmpeg PRIVATE libohaudio.so)
+# HiLog
+target_link_libraries(ffmpeg PRIVATE libhilog_ndk.z.so)
+# NetConnection
+target_link_libraries(ffmpeg PRIVATE libnet_connection.so)
 
 #修改文件CMakeLists.txt
 #因为此三方库中存在汇编编译的部分，所以需要修改CFLAGS参考如下，符号不可抢占且优先使用本地符号
@@ -61,8 +67,3 @@ target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/zlib
 
 #将三方库的头文件加入工程中
 target_include_directories(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/FFmpeg/${OHOS_ARCH}/include)
-
-#OHAudio
-target_link_libraries(ffmpeg PRIVATE libohaudio.so)
-#HiLog
-target_link_libraries(ffmpeg PRIVATE libhilog_ndk.z.so)

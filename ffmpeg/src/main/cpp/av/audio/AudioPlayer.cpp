@@ -15,7 +15,7 @@ static const AVSampleFormat OUTPUT_SAMPLE_FORMAT = AV_SAMPLE_FMT_S16;
 static const OH_AudioStream_SampleFormat OUTPUT_RENDER_SAMPLE_FORMAT = AUDIOSTREAM_SAMPLE_S16LE;
 
 AudioPlayer::AudioPlayer(const std::string& url, int64_t start_time_position_ms): url(url), start_time_position_ms(start_time_position_ms) {
-
+    
 }
 
 AudioPlayer::~AudioPlayer() {
@@ -29,6 +29,14 @@ AudioPlayer::~AudioPlayer() {
     
     event_msg_queue->stop();
     delete event_msg_queue;
+    
+    if ( flags.is_registered_network_status_change_callback ) {
+        NetworkReachability::shared().removeNetworkStatusChangeCallback(network_status_change_callback_id);
+    }
+    
+    if ( recreate_reader_scheduler) {
+        recreate_reader_scheduler->tryCancel();
+    }
     
     if ( dec_thread && dec_thread->joinable() ) {
         dec_thread->join();
@@ -89,15 +97,21 @@ void AudioPlayer::seek(int64_t time_pos_ms) {
     }
     
     if ( flags.should_recreate_reader ) {
-        if ( recreate_reader_scheduler && !recreate_reader_scheduler->tryCancel() ) {
-            return;
+        flags.seeked_before_recreate_reader = true;
+        start_time_position_ms = time_pos_ms;
+        if ( recreate_reader_scheduler ) {
+            recreate_reader_scheduler->tryCancel();
+            recreate_reader_scheduler = nullptr;
         }
-        flags.should_recreate_reader = false;
         flush();
-        recreateReader(time_pos_ms);
+        lock.unlock();
+        recreateReaderIfNeeded();
         return;
     }
     
+    if ( flags.should_align_pts ) {
+        flags.should_align_pts = false;
+    }
     audio_reader->seek(time_pos_ms);
 }
 
@@ -141,20 +155,25 @@ void AudioPlayer::onPrepare() {
     }
     
     flags.prepare_invoked = true;
-    recreateReader(start_time_position_ms);
+    onRecreateReader(start_time_position_ms);
 }
 
-void AudioPlayer::recreateReader(int64_t start_time_position_ms) {
+void AudioPlayer::onRecreateReader(int64_t start_time_position_ms) {
+#ifdef DEBUG
     client_print_message3("AAAAA: AudioPlayer::recreateReader(%lld)", start_time_position_ms);
+#endif
     if ( audio_reader ) {
         delete audio_reader;
     }
     
+    flags.should_recreate_reader = false;
+
     audio_reader = new AudioReader(url, start_time_position_ms);
     audio_reader->setReadyToReadPacketCallback(std::bind(&AudioPlayer::onReaderReadyToReadCallback, this, std::placeholders::_1, std::placeholders::_2));
     audio_reader->setReadPacketCallback(std::bind(&AudioPlayer::onReaderReadPacketCallback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     audio_reader->setErrorCallback(std::bind(&AudioPlayer::onReaderErrorCallback, this, std::placeholders::_1, std::placeholders::_2));
     audio_reader->prepare();
+    recreate_reader_scheduler = nullptr;
 }
 
 void AudioPlayer::onReaderReadyToReadCallback(AudioReader* reader, AVStream* stream) {
@@ -162,6 +181,10 @@ void AudioPlayer::onReaderReadyToReadCallback(AudioReader* reader, AVStream* str
     if ( flags.has_error || flags.release_invoked ) {
         return;
     } 
+    
+    // reset flags
+    recreate_reader_delay = 0;
+    flags.seeked_before_recreate_reader = false;
     
     // 网络断开重连时新的 reader 回调会重新进这里, 以下初始化代码无需再次执行, 直接return即可;
     if ( flags.init_successful ) {
@@ -275,42 +298,32 @@ void AudioPlayer::onReaderErrorCallback(AudioReader* reader, int ff_err) {
          ff_err == AVERROR(ECONNABORTED) ||
          ff_err == AVERROR(ECONNRESET) || 
          ff_err == AVERROR(ETIMEDOUT) || 
-         ff_err == AVERROR(EHOSTUNREACH)
+         ff_err == AVERROR(EHOSTUNREACH) ||
+         ff_err == AVERROR_INVALIDDATA
         ) {
         std::unique_lock<std::mutex> lock(mtx);
         flags.should_recreate_reader = true;
-        recreate_reader_scheduler = TaskScheduler::scheduleTask([&] {
-            std::unique_lock<std::mutex> lock(mtx);
-            if ( flags.has_error || flags.release_invoked ) {
+        
+        NetworkStatus network_status = NetworkReachability::shared().getStatus();
+#ifdef DEBUG
+        client_print_message3("AAAA: network status: %d", network_status);
+#endif
+        // 无网络的时候监听网络状态变更;
+        // 可用时重新初始化 reader;
+        if ( !flags.is_registered_network_status_change_callback ) {
+            if ( network_status != NetworkStatus::AVAILABLE ) {
+                flags.is_registered_network_status_change_callback = true;
+                NetworkReachability::shared().addNetworkStatusChangeCallback(std::bind(&AudioPlayer::onNetworkStatusChange, this, std::placeholders::_1));
                 return;
             }
-            
-            // 如果之前未完成初始化, 则直接重新创建 reader 即可;
-            // 如果已完成初始化, 则需要考虑读取的开始位置;
-            // - 等待期间用户可能调用seek, 需要从seek的位置开始播放(模糊位置)
-            // - 如果未执行seek操作, 则需要从当前位置开始播放(精确位置), 需要在解码时对齐数据
-            if ( !flags.init_successful ) {
-                recreateReader(start_time_position_ms);
-                return;
-            }
-            
-            // 如果等待期间用户执行了 seek 操作, 则 recreate_reader_task 会被取消;
-            // 这里仅需考虑从当前位置恢复读取即可;
-            // 从当前fifo的位置进行恢复, 新的解码数据需要对齐fifo后才能添加到fifo中;
-
-            // reset flags 
-            flags.should_align_pts = true; // 解码数据需要对齐到当前 fifo 的尾部;
-            flags.should_flush_pkt = true; // reader 重新创建完毕后, 需要 flush 掉 pkt 的缓存;
-            flags.should_recreate_reader = false;
-            
-            int64_t start_pts = audio_fifo->getEndPts();
-            if ( start_pts == AV_NOPTS_VALUE ) { 
-                start_pts = 0; 
-            }
-            int64_t pts_ms = av_rescale_q(start_pts, output_time_base, (AVRational){ 1, 1000 });
-            recreateReader(pts_ms);
-            recreate_reader_scheduler = nullptr;
-        }, 5);
+        }
+        
+        // 有网络时延迟n秒后重试;
+        if ( network_status == NetworkStatus::AVAILABLE ) {
+            recreate_reader_scheduler = TaskScheduler::scheduleTask([&] {
+                recreateReaderIfNeeded();
+            }, recreate_reader_delay += 2);
+        }
         return;
     }
     
@@ -715,5 +728,51 @@ void AudioPlayer::startRenderer() {
     }
     flags.is_renderer_running = true;
 }
+
+void AudioPlayer::onNetworkStatusChange(NetworkStatus status) {
+    if ( status == NetworkStatus::AVAILABLE ) {
+        recreateReaderIfNeeded();
+    }
+}
+
+void AudioPlayer::recreateReaderIfNeeded() {
+#ifdef DEBUG
+    client_print_message3("AAAA: recreateReaderIfNeeded");
+#endif
+    
+    std::unique_lock<std::mutex> lock(mtx);
+    if ( !flags.should_recreate_reader || flags.has_error || flags.release_invoked ) {
+        return;
+    }
+    
+    if ( recreate_reader_scheduler ) {
+        recreate_reader_scheduler->tryCancel();
+    }
+    
+    // 如果之前未完成初始化, 则直接重新创建 reader 即可;
+    // 如果已完成初始化, 则需要考虑读取的开始位置;
+    // - 等待期间用户可能调用seek, 需要从seek的位置开始播放(模糊位置)
+    // - 如果未执行seek操作, 则需要从当前位置开始播放(精确位置), 需要在解码时对齐数据
+    if ( !flags.init_successful || flags.seeked_before_recreate_reader ) {
+        onRecreateReader(start_time_position_ms);
+        return;
+    }
+    
+    // 如果等待期间用户执行了 seek 操作, 则 recreate_reader_task 会被取消;
+    // 这里仅需考虑从当前位置恢复读取即可;
+    // 从当前fifo的位置进行恢复, 新的解码数据需要对齐fifo后才能添加到fifo中;
+
+    // set flags 
+    flags.should_align_pts = true; // 解码数据需要对齐到当前 fifo 的尾部;
+    flags.should_flush_pkt = true; // reader 重新创建完毕后, 需要 flush 掉 pkt 的缓存;
+    
+    int64_t start_pts = audio_fifo->getEndPts();
+    if ( start_pts == AV_NOPTS_VALUE ) { 
+        start_pts = 0; 
+    }
+    int64_t pts_ms = av_rescale_q(start_pts, output_time_base, (AVRational){ 1, 1000 });
+    onRecreateReader(pts_ms);
+}
+
 
 }
