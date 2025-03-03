@@ -13,6 +13,7 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <network/netmanager/net_connection_type.h>
 
 namespace FFAV {
 
@@ -31,8 +32,11 @@ public:
     uint32_t addNetworkStatusChangeCallback(NetworkStatusChangeCallback callback);
     void removeNetworkStatusChangeCallback(uint32_t callback_id);
     
-    void setStatus(NetworkStatus status);
 private:
+    static void OnNetworkAvailable(NetConn_NetHandle *netHandle);
+    static void OnNetLost(NetConn_NetHandle *netHandle);
+    static void OnNetUnavailable();
+    
     NetworkReachability();
     ~NetworkReachability();
 
@@ -41,6 +45,8 @@ private:
     std::mutex mtx;
     std::map<uint32_t, NetworkStatusChangeCallback> callbacks;
     uint32_t next_callback_id { 0 };
+    
+    void setStatus(NetworkStatus status);
 };
 
 }

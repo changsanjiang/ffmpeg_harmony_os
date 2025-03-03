@@ -10,15 +10,15 @@
 
 namespace FFAV {
 
-void onNetworkAvailable(NetConn_NetHandle *netHandle) {
+void NetworkReachability::OnNetworkAvailable(NetConn_NetHandle *netHandle) {
     NetworkReachability::shared().setStatus(NetworkStatus::AVAILABLE);
 }
 
-void onNetLost(NetConn_NetHandle *netHandle) {
+void NetworkReachability::OnNetLost(NetConn_NetHandle *netHandle) {
     NetworkReachability::shared().setStatus(NetworkStatus::LOST);
 }
 
-void onNetUnavailable() {
+void NetworkReachability::OnNetUnavailable() {
     NetworkReachability::shared().setStatus(NetworkStatus::UNAVAILABLE);
 }
 
@@ -29,9 +29,9 @@ NetworkReachability& NetworkReachability::shared() {
 
 NetworkReachability::NetworkReachability() {
     NetConn_NetConnCallback netConnCallback = { nullptr };
-    netConnCallback.onNetworkAvailable = onNetworkAvailable;
-    netConnCallback.onNetUnavailable = onNetUnavailable;
-    netConnCallback.onNetLost = onNetLost;
+    netConnCallback.onNetworkAvailable = OnNetworkAvailable;
+    netConnCallback.onNetUnavailable = OnNetUnavailable;
+    netConnCallback.onNetLost = OnNetLost;
     OH_NetConn_RegisterDefaultNetConnCallback(&netConnCallback, &oh_callback_id);
 }
 
