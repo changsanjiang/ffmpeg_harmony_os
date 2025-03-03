@@ -23,6 +23,7 @@
 #ifndef FFMPEGPROJ_MEDIAREADER_H
 #define FFMPEGPROJ_MEDIAREADER_H
 
+#include <map>
 #include <string>
 
 extern "C" {
@@ -42,7 +43,7 @@ public:
     ~MediaReader();
 
     // 打开媒体文件
-    int open(const std::string& url);
+    int open(const std::string& url, const std::map<std::string, std::string>& http_options);
     
     // 获取流的数量
     int getStreamCount();

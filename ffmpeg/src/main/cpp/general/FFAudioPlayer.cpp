@@ -114,6 +114,15 @@ static napi_value ToJsError(napi_env env, const FFAV::Error* error) {
     return result;
 }
 
+std::string NapiValueToString(napi_env env, napi_value value) {
+    size_t str_size = 0;
+    napi_get_value_string_utf8(env, value, nullptr, 0, &str_size);
+    
+    std::string result(str_size, '\0');
+    napi_get_value_string_utf8(env, value, &result[0], str_size + 1, &str_size);
+    return result;
+}
+
 napi_value FFAudioPlayer::GetUrl(napi_env env, napi_callback_info info) {
 #ifdef DEBUG
     client_print_message3("AAAA: FFAudioPlayer::GetUrl");
@@ -153,12 +162,8 @@ napi_value FFAudioPlayer::SetUrl(napi_env env, napi_callback_info info) {
     napi_unwrap(env, js_this, reinterpret_cast<void**>(&obj));
     
     obj->url.clear();
-//    if ( obj->opts ) {
-//        delete obj->opts;
-//        obj->opts = nullptr;
-//    }
-    obj->start_time_position_ms = 0;
-
+    obj->options.clear();
+    
     napi_valuetype urltype;
     napi_typeof(env, args[url_idx], &urltype);
 
@@ -181,15 +186,37 @@ napi_value FFAudioPlayer::SetUrl(napi_env env, napi_callback_info info) {
     napi_valuetype valuetype;
     napi_typeof(env, opts, &valuetype);
     if ( valuetype != napi_undefined ) {
+        int64_t start_time_position_ms = 0;
+        std::map<std::string, std::string> http_options;
+        
         napi_value opt;
         napi_get_named_property(env, opts, "startTimePosition", &opt);
-        napi_typeof(env, opts, &valuetype);
+        napi_typeof(env, opt, &valuetype);
         if ( valuetype != napi_undefined ) {
-            int64_t start_time_position_ms;
             napi_get_value_int64(env, opt, &start_time_position_ms);
-            //obj->opts = new FFAudioPlaybackOptions { start_time_position_ms };
-            obj->start_time_position_ms = start_time_position_ms;
         }
+        
+        napi_get_named_property(env, opts, "httpOptions", &opt);
+        napi_typeof(env, opt, &valuetype);
+        if ( valuetype != napi_undefined ) {
+            // 获取对象的所有键
+            napi_value keys;
+            napi_get_property_names(env, opt, &keys);
+            // 获取键的数量
+            uint32_t length = 0;
+            napi_get_array_length(env, keys, &length);
+            
+            for (uint32_t i = 0; i < length; i++) {
+                napi_value key, value;
+                napi_get_element(env, keys, i, &key);
+                std::string keyStr = NapiValueToString(env, key);
+                napi_get_named_property(env, opt, keyStr.c_str(), &value);
+                std::string valueStr = NapiValueToString(env, value);
+                http_options[keyStr] = valueStr;
+            }
+        }
+        obj->options.start_time_position_ms = start_time_position_ms;
+        obj->options.http_options = std::move(http_options);
     }
     return nullptr;
 }
@@ -550,7 +577,7 @@ FFAudioPlayer::~FFAudioPlayer() {
 
 bool FFAudioPlayer::createPlayer() {
     if ( player == nullptr && !url.empty() ) {
-        player = new FFAV::AudioPlayer(url, start_time_position_ms);
+        player = new FFAV::AudioPlayer(url, options);
         if ( speed != 1 ) player->setSpeed(speed);
         if ( volume != 1 ) player->setVolume(volume);
         player->setEventCallback(std::bind(&FFAudioPlayer::onPlayerEvent, this, std::placeholders::_1));
@@ -598,6 +625,9 @@ void FFAudioPlayer::stop() {
     onPlayableDurationChange(0);
     onDurationChange(0);
     onPlayWhenReadyChange(false, FFAV::PlayWhenReadyChangeReason::USER_REQUEST);
+    
+    url.clear();
+    options.clear();
 }
 
 void FFAudioPlayer::seek(int64_t time_ms) {

@@ -16,7 +16,7 @@ namespace FFAV {
 
 class AudioReader {
 public:
-    AudioReader(const std::string& url, int64_t start_time_pos_ms);
+    AudioReader(const std::string& url, int64_t start_time_pos_ms, const std::map<std::string, std::string>& http_options);
     ~AudioReader();
     
     void prepare();
@@ -42,6 +42,7 @@ public:
 private:
     const std::string url;
     int64_t start_time_pos_ms;
+    const std::map<std::string, std::string> http_options;
     
     std::mutex mtx;
     std::condition_variable cv;

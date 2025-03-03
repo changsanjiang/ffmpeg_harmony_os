@@ -14,7 +14,7 @@ namespace FFAV {
 static const AVSampleFormat OUTPUT_SAMPLE_FORMAT = AV_SAMPLE_FMT_S16;
 static const OH_AudioStream_SampleFormat OUTPUT_RENDER_SAMPLE_FORMAT = AUDIOSTREAM_SAMPLE_S16LE;
 
-AudioPlayer::AudioPlayer(const std::string& url, int64_t start_time_position_ms): url(url), start_time_position_ms(start_time_position_ms) {
+AudioPlayer::AudioPlayer(const std::string& url, const AudioPlaybackOptions& options): url(url), start_time_position_ms(options.start_time_position_ms), http_options(options.http_options) {
     
 }
 
@@ -168,7 +168,7 @@ void AudioPlayer::onRecreateReader(int64_t start_time_position_ms) {
     
     flags.should_recreate_reader = false;
 
-    audio_reader = new AudioReader(url, start_time_position_ms);
+    audio_reader = new AudioReader(url, start_time_position_ms, http_options);
     audio_reader->setReadyToReadPacketCallback(std::bind(&AudioPlayer::onReaderReadyToReadCallback, this, std::placeholders::_1, std::placeholders::_2));
     audio_reader->setReadPacketCallback(std::bind(&AudioPlayer::onReaderReadPacketCallback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     audio_reader->setErrorCallback(std::bind(&AudioPlayer::onReaderErrorCallback, this, std::placeholders::_1, std::placeholders::_2));

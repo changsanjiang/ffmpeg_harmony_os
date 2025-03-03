@@ -9,7 +9,7 @@
 
 namespace FFAV {
 
-AudioReader::AudioReader(const std::string& url, int64_t start_time_pos_ms): url(url), start_time_pos_ms(start_time_pos_ms) {
+AudioReader::AudioReader(const std::string& url, int64_t start_time_pos_ms, const std::map<std::string, std::string>& http_options): url(url), start_time_pos_ms(start_time_pos_ms), http_options(http_options) {
     
 }
 
@@ -119,7 +119,7 @@ void AudioReader::ReadThread() {
         // init reader
         audio_reader = new MediaReader();
         lock.unlock();
-        ret = audio_reader->open(url); // thread blocked;
+        ret = audio_reader->open(url, http_options); // thread blocked;
         
         // re_lock
         lock.lock();

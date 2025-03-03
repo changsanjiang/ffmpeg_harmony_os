@@ -34,7 +34,7 @@ MediaReader::MediaReader() = default;
 
 MediaReader::~MediaReader() { release(); }
 
-int MediaReader::open(const std::string& url) {
+int MediaReader::open(const std::string& url, const std::map<std::string, std::string>& http_options) {
     fmt_ctx = avformat_alloc_context();
     if ( fmt_ctx == nullptr ) {
         return AVERROR(ENOMEM);
@@ -42,7 +42,14 @@ int MediaReader::open(const std::string& url) {
 
     fmt_ctx->interrupt_callback = { interrupt_cb, &interrupt_requested };
 
-    int ret = avformat_open_input(&fmt_ctx, url.c_str(), nullptr, nullptr);
+    AVDictionary *options = nullptr;
+    for ( auto pair: http_options ) {
+        av_dict_set(&options, pair.first.c_str(), pair.second.c_str(), 0);
+    }
+    
+    int ret = avformat_open_input(&fmt_ctx, url.c_str(), nullptr, &options);
+    av_dict_free(&options);
+    
     if ( ret < 0 ) {
         return ret;
     }

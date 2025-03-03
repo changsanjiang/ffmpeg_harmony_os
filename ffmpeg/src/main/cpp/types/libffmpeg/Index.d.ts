@@ -81,6 +81,20 @@ export enum FFPlayWhenReadyChangeReason {
 
 export interface FFAudioPlaybackOptions {
   readonly startTimePosition?: number;  // 毫秒, 非负数, 表示从音频的某个时间点开始播放
+
+  /** 设置 http 请求;
+   *
+   *    可设置的选项请参考连接: https://ffmpeg.org/ffmpeg-protocols.html#http
+   *
+   * 例如:
+   *\code
+   *    // 仅设置 请求头
+   *    player.setUrl(audio.url, { httpOptions: { "headers": "Authorization: Bearer your_token\r\nUser-Agent: MyFFmpegApp/1.0" }});
+   *    // 仅设置 cookies
+   *    player.setUrl(audio.url, { httpOptions: { "cookies": "abc=123; path=/;" }});
+   *\endcode
+   */
+  readonly httpOptions?: Record<string, string>;
 }
 
 export class FFAudioPlayer {

@@ -1,5 +1,6 @@
 import { FFAudioPlayer, FFPlayWhenReadyChangeReason } from '@sj/ffmpeg';
 import { FileMgr } from '@sj/filemgr';
+import { MCMediaCache } from '@sj/mediacache';
 
 interface AudioItem {
   readonly name: string;
@@ -49,6 +50,12 @@ struct AudioPlayerDemo {
     FileMgr.copyRawFileToPath(getContext(this), 'world.mp3', this.mAudios[0].url, { checkExistence: true, returnIfExists: true });
     FileMgr.copyRawFileToPath(getContext(this), 'power.mp3', this.mAudios[1].url, { checkExistence: true, returnIfExists: true });
     FileMgr.copyRawFileToPath(getContext(this), 'input.mp4', this.mAudios[2].url, { checkExistence: true, returnIfExists: true });
+
+    const proxyUrl = await MCMediaCache.proxy("https://consumer.huawei.com/content/dam/huawei-cbg-site/cn/mkt/pdp/phones/mate70-pro-plus/video/design/design-intro-popup.mp4");
+    this.mAudios.push({
+      name: "proxyUrl HUAWEI Mate 70 Pro+",
+      url: proxyUrl
+    })
   }
 
   aboutToDisappear(): void {

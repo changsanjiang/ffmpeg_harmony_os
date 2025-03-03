@@ -1,3 +1,7 @@
+#### [v1.1.5] 2025/03
+- FFAudioPlayer 增加`httpOptions`, 用于配置 http 请求, 例如设置 headers、cookies 等;
+- FFAudioPlayer 增加断网重试;
+
 #### [v1.1.4] 2025/02
 - 开启`libopencore-amrnb`和`libopencore-amrwb`, 用来编码和解码`AMR-NB`和`AMR-WB`音频;
 
