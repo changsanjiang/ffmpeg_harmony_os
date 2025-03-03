@@ -114,7 +114,7 @@ static napi_value ToJsError(napi_env env, const FFAV::Error* error) {
     return result;
 }
 
-std::string NapiValueToString(napi_env env, napi_value value) {
+static std::string NapiValueToString(napi_env env, napi_value value) {
     size_t str_size = 0;
     napi_get_value_string_utf8(env, value, nullptr, 0, &str_size);
     
