@@ -58,7 +58,7 @@ struct Index {
 
     await MCMediaCache.prepare();
     MCMediaCache.setLogEnabled(true);
-    MCMediaCache.setLogWhiteModules([MCLogModule.MCHttpRequest, MCLogModule.MCHttpResponse])
+    MCMediaCache.setLogWhiteModules([MCLogModule.MCHttpConnectionHandler, MCLogModule.MCHttpResponse])
 
     FileMgr.copyRawFileToPath(getContext(this), 'input.mp4', this.mp4Path, { checkExistence: true, returnIfExists: true });
     FileMgr.copyRawFileToPath(getContext(this), 'loading.gif', this.gifPath, { checkExistence: true, returnIfExists: true });
