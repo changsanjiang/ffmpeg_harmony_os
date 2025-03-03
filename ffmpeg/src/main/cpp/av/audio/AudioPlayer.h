@@ -12,6 +12,7 @@
 #include "av/audio/EventMessageQueue.h"
 #include "av/core/AudioRenderer.h"
 #include "av/core/PacketQueue.h"
+#include "av/util/TaskScheduler.h"
 #include <stdint.h>
 #include <thread>
 #include <memory>
@@ -70,6 +71,7 @@ private:
     int output_nb_channels;
     int output_nb_bytes_per_sample;
     
+    std::shared_ptr<TaskScheduler> recreate_reader_scheduler { nullptr };
     struct {
         unsigned init_successful :1;
         unsigned prepare_invoked :1;
@@ -86,9 +88,14 @@ private:
         unsigned is_renderer_running :1;
         unsigned should_drain_fifo :1; 
         unsigned is_playback_ended :1;
+        
+        unsigned should_recreate_reader :1;
+        unsigned should_flush_pkt :1;
+        unsigned should_align_pts :1;
     } flags = { 0 };
     
     
+    void recreateReader(int64_t start_time_position_ms);
     void onReaderReadyToReadCallback(AudioReader* reader, AVStream* stream);
     void onReaderReadPacketCallback(AudioReader* reader, AVPacket* pkt, bool should_flush);
     void onReaderErrorCallback(AudioReader* reader, int ff_err);
