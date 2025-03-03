@@ -20,9 +20,19 @@
 
 namespace FFAV {
 
+struct AudioPlaybackOptions {
+    int64_t start_time_position_ms;
+    std::map<std::string, std::string> http_options;
+    
+    void clear() {
+        start_time_position_ms = 0;
+        http_options.clear();
+    }
+};
+
 class AudioPlayer {
     public:
-    AudioPlayer(const std::string& url, int64_t start_time_position_ms = 0);
+    AudioPlayer(const std::string& url, const AudioPlaybackOptions& options);
     ~AudioPlayer();
 
     void prepare();
@@ -41,6 +51,7 @@ class AudioPlayer {
 private:
     const std::string url;
     int64_t start_time_position_ms;
+    const std::map<std::string, std::string> http_options;
     
     AudioReader* audio_reader { nullptr };
     AudioDecoder* audio_decoder { nullptr };
