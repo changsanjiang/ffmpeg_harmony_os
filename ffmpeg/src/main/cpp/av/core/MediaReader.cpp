@@ -61,7 +61,7 @@ int MediaReader::open(const std::string& url, const std::map<std::string, std::s
     return avformat_find_stream_info(fmt_ctx, nullptr);
 }
 
-int MediaReader::getStreamCount() { 
+unsigned int MediaReader::getStreamCount() { 
     if ( fmt_ctx == nullptr ) {
         return 0;
     }
@@ -83,7 +83,11 @@ AVStream *_Nullable MediaReader::getStream(int stream_index) {
 
 AVStream* _Nullable MediaReader::getBestStream(AVMediaType type) {
     return getStream(findBestStream(type));
- }
+}
+
+AVStream** _Nullable MediaReader::getStreams() {
+    return fmt_ctx->streams;
+}
 
 int MediaReader::findBestStream(AVMediaType type) {
     if ( fmt_ctx == nullptr ) {

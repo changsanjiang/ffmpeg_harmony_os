@@ -46,11 +46,12 @@ public:
     int open(const std::string& url, const std::map<std::string, std::string>& http_options);
     
     // 获取流的数量
-    int getStreamCount();
+    unsigned int getStreamCount();
 
     // 获取指定流的 AVStream
     AVStream* _Nullable getStream(int stream_index);    
     AVStream* _Nullable getBestStream(AVMediaType type);
+    AVStream** _Nullable getStreams();
 
     /* av_find_best_stream
      *

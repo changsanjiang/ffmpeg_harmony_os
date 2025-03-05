@@ -66,7 +66,6 @@ void AudioReader::seek(int64_t time_pos_ms) {
     }
     
     if ( time_pos_ms < 0 ) time_pos_ms = 0;
-    else if ( time_pos_ms > audio_stream_duration_ms ) time_pos_ms = audio_stream_duration_ms;
     
     int64_t time = av_rescale_q(time_pos_ms, (AVRational){ 1, 1000 }, AV_TIME_BASE_Q);
     
@@ -160,8 +159,6 @@ void AudioReader::ReadThread() {
         }
         
         audio_stream_index = audio_stream->index;
-        audio_stream_time_base = audio_stream->time_base;
-        audio_stream_duration_ms = av_rescale_q(audio_stream->duration, audio_stream_time_base, (AVRational){ 1, 1000 });
         
         if ( start_time_pos_ms > 0 ) {
             flags.wants_seek = true;

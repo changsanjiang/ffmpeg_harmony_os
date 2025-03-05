@@ -91,13 +91,13 @@ int AudioDecoder::init(
 }
 
 int AudioDecoder::decode(AVPacket* pkt, AudioDecoder::DecodeFrameCallback callback) {
-    if ( is_cleared ) is_cleared = false;
+    if ( is_flushed ) is_flushed = false;
     return AudioUtils::transcode(pkt, audio_decoder, dec_frame, filter_graph, filt_frame, FILTER_BUFFER_SRC_NAME, FILTER_BUFFER_SINK_NAME, callback);
 }
 
 void AudioDecoder::flush() {
-    if ( !is_cleared ) {
-        is_cleared = true;
+    if ( !is_flushed ) {
+        is_flushed = true;
         audio_decoder->flush();
         resetFilterGraph();
     }
@@ -132,7 +132,12 @@ int AudioDecoder::initFilterGraph(
     AVSampleFormat out_sample_fmt,
     int out_sample_rate,
     const std::string& out_ch_layout_desc
-) {
+) {    
+    if ( filter_graph ) {
+        delete filter_graph;
+        filter_graph = nullptr;
+    }
+
     int ff_ret = 0;
 
     // init filter graph

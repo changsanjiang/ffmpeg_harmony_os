@@ -63,7 +63,7 @@ private:
     AVFrame *dec_frame { nullptr };
     AVFrame *filt_frame { nullptr };
     
-    bool is_cleared { true };
+    bool is_flushed { true };
     
     int initAudioDecoder(AVCodecParameters* codecpar);
     int initFilterGraph(

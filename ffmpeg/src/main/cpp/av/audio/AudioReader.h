@@ -67,8 +67,6 @@ private:
     std::unique_ptr<std::thread> read_thread { nullptr };
      
     int audio_stream_index;
-    AVRational audio_stream_time_base;
-    int64_t audio_stream_duration_ms;
     
     std::atomic<bool> is_pkt_buffer_full { false };
 
