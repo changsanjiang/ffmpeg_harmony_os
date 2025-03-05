@@ -286,20 +286,6 @@ int FilterGraph::getFrame(const std::string& sink_name, AVFrame* _Nonnull frame)
     return av_buffersink_get_frame(buffersink_ctx, frame);
 }
 
-void FilterGraph::flush(const std::string& src_name, const std::string& sink_name) {
-    addFrame(src_name, nullptr, AV_BUFFERSRC_FLAG_PUSH);
-    AVFrame* filt_frame = av_frame_alloc();
-    int ret = 0;
-    do {
-        ret = getFrame(sink_name, filt_frame);
-        if ( ret < 0 ) {
-            break;
-        }
-        av_frame_unref(filt_frame);
-    } while(true);
-    av_frame_free(&filt_frame);
-}
-
 void FilterGraph::release() {
     if ( outputs != nullptr ) {
         avfilter_inout_free(&outputs);

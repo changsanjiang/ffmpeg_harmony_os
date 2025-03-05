@@ -91,8 +91,6 @@ public:
      */
     int getFrame(const std::string& sink_name, AVFrame* _Nonnull frame);
 
-    void flush(const std::string& src_name, const std::string& sink_name);
-    
 private:
     AVFilterGraph* _Nullable filter_graph = nullptr;
     AVFilterInOut* _Nullable outputs = nullptr;
