@@ -490,7 +490,7 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* writ
     // 缓冲不足
     bool is_fifo_underflow = nb_fifo_samples < nb_write_buffer_samples && !flags.is_dec_eof;
     // 是否应该播放到缓冲耗尽
-    bool should_drain_pkt = flags.should_drain_pkt;
+    bool should_drain_fifo = flags.should_drain_fifo;
     // 是否需要尽快播放
     // 当调用 playImmediately 或解码 eof 时直接播放
     bool play_immediate = (flags.should_play_immediate && nb_fifo_samples >= render_frame_size) || flags.is_dec_eof;
@@ -498,8 +498,8 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* writ
     bool keep_up_likely = (nb_fifo_samples >= minimum_frame_threshold);
     
     // reset flags
-    if ( is_fifo_underflow && flags.should_drain_pkt ) {
-        flags.should_drain_pkt = false;
+    if ( is_fifo_underflow && flags.should_drain_fifo ) {
+        flags.should_drain_fifo = false;
     }
     if ( flags.should_play_immediate ) {
         flags.should_play_immediate = false;
@@ -507,10 +507,10 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* writ
     
     // 是否需要读取fifo写入播放
     // 
-    bool should_read_fifo = !is_fifo_underflow && (should_drain_pkt || play_immediate || keep_up_likely);
+    bool should_read_fifo = !is_fifo_underflow && (should_drain_fifo || play_immediate || keep_up_likely);
     if ( should_read_fifo ) {
-        if ( !should_drain_pkt ) {
-            flags.should_drain_pkt = true;
+        if ( !should_drain_fifo ) {
+            flags.should_drain_fifo = true;
         }    
         
         int64_t pts;
@@ -648,7 +648,7 @@ void AudioPlayer::flush() {
         flags.is_render_eof = false;
         flags.is_playback_ended = false;
         flags.should_reset_current_time = true;
-        flags.should_drain_pkt = false;
+        flags.should_drain_fifo = false;
     }
 }
 
