@@ -25,6 +25,7 @@
 
 #include <cstdint>
 extern "C" {
+#include <libavutil/avutil.h>
 #include <libavcodec/avcodec.h>
 }
 
@@ -40,6 +41,9 @@ public:
     void push(AVPacket* _Nonnull packet);
     bool pop(AVPacket* _Nonnull packet);
     void clear();
+    
+    int64_t getLastPushPts();
+    int64_t getLastPopPts();
 
     // 获取所有数据包的数量
     size_t getCount();
@@ -50,6 +54,8 @@ public:
 private:
     std::queue<AVPacket*> queue;
     int64_t total_size = 0;
+    int64_t last_push_pts = AV_NOPTS_VALUE; 
+    int64_t last_pop_pts = AV_NOPTS_VALUE;
 };
 
 }

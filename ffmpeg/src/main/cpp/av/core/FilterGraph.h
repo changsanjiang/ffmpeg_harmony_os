@@ -91,6 +91,23 @@ public:
      */
     int getFrame(const std::string& sink_name, AVFrame* _Nonnull frame);
 
+    /**
+     * Send a command to one or more filter instances.
+     *
+     * @param graph  the filter graph
+     * @param target the filter(s) to which the command should be sent
+     *               "all" sends to all filters
+     *               otherwise it can be a filter or filter instance name
+     *               which will send the command to all matching filters.
+     * @param cmd    the command to send, for handling simplicity all commands must be alphanumeric only
+     * @param arg    the argument for the command
+     * @param res    a buffer with size res_size where the filter(s) can return a response.
+     *
+     * @returns >=0 on success otherwise an error code.
+     *              AVERROR(ENOSYS) on unsupported commands
+     */
+    int sendCommand(const std::string& target_name, const std::string& cmd, const std::string& arg);
+    
 private:
     AVFilterGraph* _Nullable filter_graph = nullptr;
     AVFilterInOut* _Nullable outputs = nullptr;

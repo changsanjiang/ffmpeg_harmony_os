@@ -21,6 +21,7 @@
 // please include "napi/native_api.h".
 
 #include "PacketQueue.h"
+#include <stdint.h>
 
 namespace FFAV {
 
@@ -36,6 +37,7 @@ void PacketQueue::push(AVPacket* _Nonnull packet) {
     
     queue.push(pkt);
     total_size += pkt->size;
+    last_push_pts = pkt->pts;
 }
 
 bool PacketQueue::pop(AVPacket* _Nonnull packet) {
@@ -45,9 +47,10 @@ bool PacketQueue::pop(AVPacket* _Nonnull packet) {
 
     AVPacket* pkt = queue.front();
     queue.pop();
+    total_size -= pkt->size;
+    last_pop_pts = pkt->pts;
     
     av_packet_move_ref(packet, pkt);
-    total_size -= pkt->size;
     av_packet_free(&pkt);
     return true;
 }
@@ -59,6 +62,16 @@ void PacketQueue::clear() {
         av_packet_free(&pkt);
     }
     total_size = 0;
+    last_push_pts = AV_NOPTS_VALUE;
+    last_pop_pts = AV_NOPTS_VALUE;
+}
+
+int64_t PacketQueue::getLastPushPts() {
+    return last_push_pts;
+}
+
+int64_t PacketQueue::getLastPopPts() {
+    return last_pop_pts;
 }
 
 size_t PacketQueue::getCount() {
