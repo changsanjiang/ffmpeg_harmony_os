@@ -107,7 +107,7 @@ private:
         unsigned play_when_ready :1;
         unsigned should_play_immediate :1;
         unsigned is_renderer_running :1;
-        unsigned should_drain_fifo :1; 
+        unsigned should_drain_pkt :1; 
         unsigned is_playback_ended :1;
         
         unsigned should_recreate_reader :1;
