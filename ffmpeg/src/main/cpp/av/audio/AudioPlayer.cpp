@@ -298,6 +298,12 @@ void AudioPlayer::onReaderReadPacketCallback(AudioReader* reader, AVPacket* pkt,
         int64_t pts_ms = av_rescale_q(pkt->pts, audio_stream_time_base, (AVRational){ 1, 1000 });
         playable_duration_ms = pts_ms;
         onEvent(std::make_shared<PlayableDurationChangeEventMessage>(playable_duration_ms));
+        
+         if ( flags.should_reset_current_time ) {
+            flags.should_reset_current_time = false;
+            current_time_ms = pts_ms;
+            onEvent(std::make_shared<CurrentTimeEventMessage>(current_time_ms));
+        }
     }
 }
 
