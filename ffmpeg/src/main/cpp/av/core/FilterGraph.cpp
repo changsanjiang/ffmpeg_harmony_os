@@ -288,8 +288,8 @@ int FilterGraph::getFrame(const std::string& sink_name, AVFrame* _Nonnull frame)
     return av_buffersink_get_frame(buffersink_ctx, frame);
 }
 
-int FilterGraph::sendCommand(const std::string& target_name, const std::string& cmd, const std::string& arg) {
-    return avfilter_graph_send_command(filter_graph, target_name.c_str(), cmd.c_str(), arg.c_str(), nullptr, 0, 0);
+int FilterGraph::sendCommand(const std::string& target_name, const std::string& cmd, const std::string& arg, int flags) {
+    return avfilter_graph_send_command(filter_graph, target_name.c_str(), cmd.c_str(), arg.c_str(), nullptr, 0, flags);
 }
 
 void FilterGraph::release() {

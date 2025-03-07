@@ -106,7 +106,7 @@ public:
      * @returns >=0 on success otherwise an error code.
      *              AVERROR(ENOSYS) on unsupported commands
      */
-    int sendCommand(const std::string& target_name, const std::string& cmd, const std::string& arg);
+    int sendCommand(const std::string& target_name, const std::string& cmd, const std::string& arg, int flags = AVFILTER_CMD_FLAG_ONE);
     
 private:
     AVFilterGraph* _Nullable filter_graph = nullptr;
