@@ -1,3 +1,6 @@
+#### [v1.1.6] 2025/03
+- 移除 decThread, 音乐播放改为实时解码; 
+
 #### [v1.1.5] 2025/03
 - FFAudioPlayer 增加`httpOptions`, 用于配置 http 请求, 例如设置 headers、cookies 等;
 - FFAudioPlayer 增加断网重试;

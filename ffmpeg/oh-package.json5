@@ -1,6 +1,6 @@
 {
   "name": "@sj/ffmpeg",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "FFmpeg for HarmonyOS. 可以执行ffmpeg及ffprobe命令, 支持并发; 同时封装了一个音乐播放器, 可以播放网络或本地文件",
   "main": "Index.ets",
   "author": "csj",
