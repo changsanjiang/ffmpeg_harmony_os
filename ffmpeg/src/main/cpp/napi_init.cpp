@@ -15,7 +15,6 @@
     along with @sj/ffmpeg. If not, see <http://www.gnu.org/licenses/>.
  * */
 #include "general/FFAbortController.h"
-#include "general/FFAudioMultiStreamPlayer.h"
 #include "general/FFAudioPlayer.h"
 #include "general/FFPlayWhenReadyChangeReason.h"
 #include "general/FFmpeg.h"
@@ -28,7 +27,6 @@ static napi_value Init(napi_env env, napi_value exports)
     FFAV::FFAudioPlayer::Init(env, exports);
     FFAV::FFAbortController::Init(env, exports);
     FFAV::FFPlayWhenReadyChangeReason::Init(env, exports);
-    FFAV::FFAudioMultiStreamPlayer::Init(env, exports);
     return exports;
 }
 EXTERN_C_END
