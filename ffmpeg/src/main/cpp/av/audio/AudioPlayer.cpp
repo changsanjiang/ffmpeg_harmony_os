@@ -38,10 +38,10 @@ AudioPlayer::~AudioPlayer() {
 #ifdef DEBUG
     client_print_message3("AAAA: AudioPlayer::~AudioPlayer before");
 #endif
-    std::unique_lock<std::mutex> lock(mtx);
-    flags.release_invoked = true;
-    lock.unlock();
-    cv.notify_all();
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        flags.release_invoked = true;
+    }
     
     event_msg_queue->stop();
     delete event_msg_queue;
@@ -52,10 +52,6 @@ AudioPlayer::~AudioPlayer() {
     
     if ( recreate_reader_scheduler) {
         recreate_reader_scheduler->tryCancel();
-    }
-    
-    if ( dec_thread && dec_thread->joinable() ) {
-        dec_thread->join();
     }
     
     if ( audio_renderer ) {
@@ -78,6 +74,10 @@ AudioPlayer::~AudioPlayer() {
     
     if ( audio_fifo ) {
         delete audio_fifo;
+    }
+    
+    if ( pkt ) {
+        av_packet_free(&pkt);
     }
     
 #ifdef DEBUG
@@ -208,18 +208,28 @@ void AudioPlayer::onReaderReadyToReadCallback(AudioReader* reader, AVStream* str
         return;
     }
     
+    // init vars
+    audio_stream_time_base = stream->time_base;
+    output_sample_format = OUTPUT_SAMPLE_FORMAT;
+    output_render_sample_format = OUTPUT_RENDER_SAMPLE_FORMAT;
+    output_nb_bytes_per_sample = av_get_bytes_per_sample(output_sample_format);
+    
     // init audio decoder
     audio_decoder = new AudioDecoder();
-    int ff_ret = audio_decoder->init(stream->codecpar, stream->time_base, OUTPUT_SAMPLE_FORMAT);
+    int ff_ret = audio_decoder->init(stream->codecpar, audio_stream_time_base, output_sample_format);
     if ( ff_ret < 0 ) {
         lock.unlock();
         onFFmpegError(ff_ret);
         return;
     }
     
+    output_sample_rate = audio_decoder->getOutputSampleRate();
+    output_time_base = (AVRational){ 1, output_sample_rate };
+    output_nb_channels = audio_decoder->getOutputChannels();
+    
     // init audio fifo
     audio_fifo = new AudioFifo();
-    ff_ret = audio_fifo->init(OUTPUT_SAMPLE_FORMAT, audio_decoder->getOutputChannels(), 1);
+    ff_ret = audio_fifo->init(output_sample_format, output_nb_channels, 1);
     if ( ff_ret < 0 ) {
         lock.unlock();
         onFFmpegError(ff_ret);
@@ -228,10 +238,11 @@ void AudioPlayer::onReaderReadyToReadCallback(AudioReader* reader, AVStream* str
     
     // init pkt queue
     pkt_queue = new PacketQueue();
+    pkt = av_packet_alloc();
     
     // init audio renderer
     audio_renderer = new AudioRenderer();
-    OH_AudioStream_Result render_ret = audio_renderer->init(OUTPUT_RENDER_SAMPLE_FORMAT, audio_decoder->getOutputSampleRate(), audio_decoder->getOutputChannels());
+    OH_AudioStream_Result render_ret = audio_renderer->init(output_render_sample_format, output_sample_rate, output_nb_channels);
     if ( render_ret != AUDIOSTREAM_SUCCESS ) {
         lock.unlock();
         onRenderError(render_ret);
@@ -246,21 +257,10 @@ void AudioPlayer::onReaderReadyToReadCallback(AudioReader* reader, AVStream* str
     audio_renderer->setInterruptEventCallback(std::bind(&AudioPlayer::onRendererInterruptEventCallback, this, std::placeholders::_1, std::placeholders::_2));
     audio_renderer->setErrorCallback(std::bind(&AudioPlayer::onRendererErrorCallback, this, std::placeholders::_1));
     audio_renderer->setOutputDeviceChangeCallback(std::bind(&AudioPlayer::onOutputDeviceChangeCallback, this, std::placeholders::_1));
-
-    // init vars
-    audio_stream_time_base = stream->time_base;
-    output_time_base = (AVRational){ 1, audio_decoder->getOutputSampleRate() };
-    output_nb_channels = audio_decoder->getOutputChannels();
-    output_nb_bytes_per_sample = av_get_bytes_per_sample(audio_decoder->getOutputSampleFormat());
     
     render_frame_size = audio_renderer->getFrameSize();
-    maximum_frame_threshold = av_rescale_q(5000, (AVRational){ 1, 1000 }, output_time_base);
-    minimum_frame_threshold = av_rescale_q(3000, (AVRational){ 1, 1000 }, output_time_base);
     duration_ms = av_rescale_q(stream->duration, audio_stream_time_base, (AVRational){ 1, 1000 });
         
-    // start dec thread
-    dec_thread =  std::make_unique<std::thread>(&AudioPlayer::DecThread, this);
-    
     // start read pkt
     reader->start();
     
@@ -284,24 +284,21 @@ void AudioPlayer::onReaderReadPacketCallback(AudioReader* reader, AVPacket* pkt,
         flush();
     }
     
-    if ( pkt ) {
-        pkt_queue->push(pkt);
-        
-        if ( pkt->pts != AV_NOPTS_VALUE ) {
-            int64_t pts_ms = av_rescale_q(pkt->pts, audio_stream_time_base, (AVRational){ 1, 1000 });
-            playable_duration_ms = pts_ms;
-            onEvent(std::make_shared<PlayableDurationChangeEventMessage>(playable_duration_ms));
-        }
-    }
-    else {
+    if ( !pkt ) {
         flags.is_read_eof = true;
         playable_duration_ms = duration_ms;
         onEvent(std::make_shared<PlayableDurationChangeEventMessage>(playable_duration_ms));
+        return;
     }
     
+    pkt_queue->push(pkt);
     reader->setPacketBufferFull(pkt_queue->getSize() >= pkt_size_threshold);
-    lock.unlock();
-    cv.notify_all();
+    
+    if ( pkt->pts != AV_NOPTS_VALUE ) {
+        int64_t pts_ms = av_rescale_q(pkt->pts, audio_stream_time_base, (AVRational){ 1, 1000 });
+        playable_duration_ms = pts_ms;
+        onEvent(std::make_shared<PlayableDurationChangeEventMessage>(playable_duration_ms));
+    }
 }
 
 void AudioPlayer::onReaderErrorCallback(AudioReader* reader, int ff_err) {
@@ -346,124 +343,72 @@ void AudioPlayer::onReaderErrorCallback(AudioReader* reader, int ff_err) {
     onFFmpegError(ff_err);
 }
 
-void AudioPlayer::DecThread() {
-    int ret = 0;
-    AVPacket* pkt = av_packet_alloc();
-    bool should_notify;
-    bool should_exit;
-    bool error_occurred;
-
+void AudioPlayer::onDec() { 
     do {
-        should_notify = false;
-        should_exit = false;
-        error_occurred = false;
-        {
-            // wait conditions
-            std::unique_lock<std::mutex> lock(mtx);
-            cv.wait(lock, [&] { 
-                if ( flags.has_error || flags.release_invoked ) {
-                    return true;
-                }
-                
-                if ( flags.is_dec_eof ) {
-                    return false;
-                }
-                
-                // frame buf 是否还可以继续填充
-                if ( audio_fifo->getNumberOfSamples() < maximum_frame_threshold ) {
-                    // 判断是否有可解码的 pkt 或 read eof;
-                    return pkt_queue->getCount() > 0 || flags.is_read_eof;
-                }
-                
-                return false;
-            });
-            
-            if ( flags.has_error || flags.release_invoked ) {
-                should_exit = true;
-            }
-            // dec pkt
-            else {
-                AVPacket* next_pkt = nullptr;
-                if ( pkt_queue->pop(pkt) ) {
-                    next_pkt = pkt;
-                }
-                
-                ret = audio_decoder->decode(next_pkt, [&](AVFrame* filt_frame) {
-                    if ( !flags.should_flush_pkt && flags.should_align_pts ) {
-                        int64_t aligned_pts = audio_fifo->getEndPts(); 
-                        int64_t start_pts = filt_frame->pts;
-                        if ( aligned_pts != AV_NOPTS_VALUE && aligned_pts != start_pts ) {
-                            if ( start_pts > aligned_pts ) {
-                                return AVERROR_BUG2;
-                            }
-                            
-                            int64_t end_pts = start_pts + filt_frame->nb_samples;
-                            if ( aligned_pts > end_pts ) {
-                                return 0;
-                            }
-                            
-                            // intersecting samples
-                            int64_t nb_samples = end_pts - aligned_pts;
-                            int pos_offset = (aligned_pts - start_pts) * output_nb_bytes_per_sample * output_nb_channels;
-                            uint8_t* data = filt_frame->data[0];
-                            data += pos_offset;
-                            audio_fifo->write((void **)&data, nb_samples, aligned_pts);
-                            flags.should_align_pts = false;
-                            return 0;
-                        }
-                        else {
-                            flags.should_align_pts = false;
-                        }
+        if ( audio_fifo->getNumberOfSamples() > render_frame_size || flags.is_dec_eof || flags.has_error || flags.release_invoked ) {
+            return;
+        }
+        
+        // 无可解码数据
+        if ( !flags.is_read_eof && pkt_queue->getCount() == 0 ) {
+            return;
+        }
+        
+        // 有可解码数据或读取结束
+        AVPacket* next_pkt = nullptr;
+        if ( pkt_queue->pop(pkt) ) {
+            next_pkt = pkt;
+        }
+        
+        int ret = audio_decoder->decode(next_pkt, [&](AVFrame* filt_frame) {
+            if ( !flags.should_flush_pkt && flags.should_align_pts ) {
+                int64_t aligned_pts = audio_fifo->getEndPts(); 
+                int64_t start_pts = filt_frame->pts;
+                if ( aligned_pts != AV_NOPTS_VALUE && aligned_pts != start_pts ) {
+                    if ( start_pts > aligned_pts ) {
+                        return AVERROR_BUG2;
                     }
-                    audio_fifo->write((void **)filt_frame->data, filt_frame->nb_samples, filt_frame->pts);
+                    
+                    int64_t end_pts = start_pts + filt_frame->nb_samples;
+                    if ( aligned_pts > end_pts ) {
+                        return 0;
+                    }
+                    
+                    // intersecting samples
+                    int64_t nb_samples = end_pts - aligned_pts;
+                    int pos_offset = (aligned_pts - start_pts) * output_nb_bytes_per_sample * output_nb_channels;
+                    uint8_t* data = filt_frame->data[0];
+                    data += pos_offset;
+                    audio_fifo->write((void **)&data, nb_samples, aligned_pts);
+                    flags.should_align_pts = false;
                     return 0;
-                });
-                
-                if ( next_pkt ) {
-                    av_packet_unref(next_pkt);
-                    audio_reader->setPacketBufferFull(pkt_queue->getSize() >= pkt_size_threshold);
                 }
-                
-                if ( ret == AVERROR_EOF ) {
-                    flags.is_dec_eof = true;
-                    should_notify = true; // notify renderer for dec eof
-                }
-                else if ( ret == AVERROR(EAGAIN) ) {
-                    // nothing
-                }
-                else if ( ret < 0 ) {
-                    error_occurred = true;
-                }
-                
-                if ( !error_occurred ) {
-                    if ( flags.should_reset_current_time && audio_fifo->getNumberOfSamples() > 0 ) {
-                        flags.should_reset_current_time = false;
-                        current_time_ms = av_rescale_q(audio_fifo->getNextPts(), output_time_base, (AVRational){ 1, 1000 });
-                        onEvent(std::make_shared<CurrentTimeEventMessage>(current_time_ms));
-                    }
+                else {
+                    flags.should_align_pts = false;
                 }
             }
+            audio_fifo->write((void **)filt_frame->data, filt_frame->nb_samples, filt_frame->pts);
+            return 0;
+        });
+        
+        if ( next_pkt ) {
+            av_packet_unref(next_pkt);
+            audio_reader->setPacketBufferFull(pkt_queue->getSize() >= pkt_size_threshold);
         }
         
-        if ( should_exit || error_occurred ) {
-            goto exit_thread;
+        if ( ret == AVERROR_EOF ) {
+            flags.is_dec_eof = true;
+            if ( flags.should_align_pts ) flags.should_align_pts = false;
+            return;
         }
-        
-        if ( should_notify ) {
-            cv.notify_all();
+        else if ( ret == AVERROR(EAGAIN) ) {
+            // nothing
+        }
+        else if ( ret < 0 ) {
+            onFFmpegError(ret);
+            return;
         }
     } while (true);
-    
-exit_thread:
-    av_packet_free(&pkt);
-    
-    if ( error_occurred ) {
-        onFFmpegError(ret);
-    }
-    
-#ifdef DEBUG
-    client_print_message3("AAAA: dec thread exit");
-#endif
 }
 
 OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* write_buffer, int write_buffer_size_in_bytes) {
@@ -484,6 +429,8 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* writ
         return AUDIO_DATA_CALLBACK_RESULT_INVALID;
     }
     
+    onDec();
+    
     int nb_write_buffer_samples = write_buffer_size_in_bytes / output_nb_channels / output_nb_bytes_per_sample;
     int nb_fifo_samples = audio_fifo->getNumberOfSamples();
     
@@ -495,7 +442,7 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* writ
     // 当调用 playImmediately 或解码 eof 时直接播放
     bool play_immediate = (flags.should_play_immediate && nb_fifo_samples >= render_frame_size) || flags.is_dec_eof;
     // 是否能够尽可能的流畅播放
-    bool keep_up_likely = (nb_fifo_samples >= minimum_frame_threshold);
+    bool keep_up_likely = playable_duration_ms - current_time_ms > 3000;
     
     // reset flags
     if ( is_fifo_underflow && flags.should_drain_fifo ) {
@@ -526,9 +473,6 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* writ
                 flags.is_render_eof = true;
             }
         }
-        
-        lock.unlock();
-        cv.notify_all(); // notify read
         return AUDIO_DATA_CALLBACK_RESULT_VALID;
     }
     
@@ -678,8 +622,6 @@ void AudioPlayer::onError(std::shared_ptr<Error> error) {
         flags.is_renderer_running = false;
     }
     onEvent(std::make_shared<ErrorEventMessage>(error));
-    lock.unlock();
-    cv.notify_all();
 }
 
 void AudioPlayer::onPlay(PlayWhenReadyChangeReason reason) {

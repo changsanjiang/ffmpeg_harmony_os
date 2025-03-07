@@ -65,10 +65,8 @@ private:
     AudioRenderer* audio_renderer { nullptr };
     AudioFifo* audio_fifo { nullptr };
     PacketQueue* pkt_queue { nullptr };
-    
+    AVPacket* pkt { nullptr };
     std::mutex mtx;
-    std::condition_variable cv;
-    std::unique_ptr<std::thread> dec_thread { nullptr };
     
     int64_t duration_ms { 0 };
     int64_t current_time_ms { 0 }; // last_render_pts_ms
@@ -79,16 +77,18 @@ private:
 
     int pkt_size_threshold { 5 * 1024 * 1024 }; // bytes; 5M;
     int render_frame_size;
-    int maximum_frame_threshold; // pcm samples; 5s;
-    int minimum_frame_threshold; // pcm samples; 3s; 播放器为了维持流畅播放所需的最小缓冲数据量
     PlayWhenReadyChangeReason play_when_ready_change_reason = USER_REQUEST;
     std::shared_ptr<Error> cur_error { nullptr };
     EventMessageQueue* event_msg_queue = new EventMessageQueue();
     
+    // formats
     AVRational audio_stream_time_base;
+    AVSampleFormat output_sample_format;
+    OH_AudioStream_SampleFormat output_render_sample_format;
+    int output_nb_bytes_per_sample;
+    int output_sample_rate;
     AVRational output_time_base;
     int output_nb_channels;
-    int output_nb_bytes_per_sample;
     
     std::shared_ptr<TaskScheduler> recreate_reader_scheduler { nullptr };
     int recreate_reader_delay { 0 };
@@ -123,8 +123,7 @@ private:
     void onReaderReadyToReadCallback(AudioReader* reader, AVStream* stream);
     void onReaderReadPacketCallback(AudioReader* reader, AVPacket* pkt, bool should_flush);
     void onReaderErrorCallback(AudioReader* reader, int ff_err);
-    
-    void DecThread();
+    void onDec();
     
     void flush();
     void onFFmpegError(int ff_err);
