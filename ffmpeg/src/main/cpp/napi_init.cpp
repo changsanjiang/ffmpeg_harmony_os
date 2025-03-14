@@ -16,6 +16,7 @@
  * */
 #include "general/FFAbortController.h"
 #include "general/FFAudioPlayer.h"
+#include "general/FFAudioWriter.h"
 #include "general/FFPlayWhenReadyChangeReason.h"
 #include "general/FFmpeg.h"
 #include "napi/native_api.h"
@@ -27,6 +28,7 @@ static napi_value Init(napi_env env, napi_value exports)
     FFAV::FFAudioPlayer::Init(env, exports);
     FFAV::FFAbortController::Init(env, exports);
     FFAV::FFPlayWhenReadyChangeReason::Init(env, exports);
+    FFAV::FFAudioWriter::Init(env, exports);
     return exports;
 }
 EXTERN_C_END

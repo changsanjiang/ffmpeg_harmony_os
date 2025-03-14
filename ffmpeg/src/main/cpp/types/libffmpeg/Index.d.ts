@@ -14,6 +14,8 @@
  You should have received a copy of the GNU General Public License
  along with @sj/ffmpeg. If not, see <http://www.gnu.org/licenses/>.
  * */
+import { audio } from '@kit.AudioKit';
+
 export namespace FFmpeg {
   export interface Options {
     logCallback?: (level: number, msg: string) => void
@@ -97,6 +99,10 @@ export interface FFAudioPlaybackOptions {
   readonly httpOptions?: Record<string, string>;
 }
 
+/**
+ * @class FFAudioPlayer
+ * @brief 音乐播放器。
+ */
 export class FFAudioPlayer {
   constructor();
 
@@ -154,4 +160,46 @@ export class FFAudioPlayer {
   public off(event: 'playableDurationChange');
 
   public off(event: 'errorChange');
+}
+
+/**
+ * @class FFAudioWriter
+ * @brief 编码 + 封装。根据目标文件名自动选择合适的封装格式，将 PCM 音频数据编码后写入到目标文件。
+ * 
+ * @note **注意:** 目标文件名必须包含正确的文件后缀（如 `.mp4`、`.aac`、`.wav`），以便自动推测封装格式。
+ */
+export class FFAudioWriter {
+  /**
+   * 创建文件写入器实例。
+   * 
+   * @param filePath 输出文件路径（需包含正确的后缀，如 `.mp4`、`.aac`）。
+   */
+  constructor(filePath: string);
+
+  /**
+   * @brief 初始化。
+   * @returns Promise<void>  成功时解析，失败时抛出错误。
+   */
+  public prepare(audioStreamInfo: audio.AudioStreamInfo): Promise<void>;
+  public prepare(audioStreamInfo: audio.AudioStreamInfo, callback: (error?: Error) => void);
+  public prepareSync(audioStreamInfo: audio.AudioStreamInfo);
+
+  /**
+   * @brief 将传入的 PCM 数据进行编码，并写入到目标文件中。
+   * @param buffer PCM 数据（该数据应符合init初始化时的格式）。
+   * @returns Promise<void> 成功时解析，失败时抛出错误。
+   * @throws 若未初始化则抛出错误。
+   */
+  public write(pcmBuffer: ArrayBuffer): Promise<void>;
+  public write(pcmBuffer: ArrayBuffer, callback: (error?: Error) => void);
+  public writeSync(pcmBuffer: ArrayBuffer);
+
+  /**
+   * @brief 关闭写入器，并写入文件尾部，释放资源。当没有更多数据时调用关闭。
+   * @returns Promise<void> 成功时解析，失败时抛出错误。
+   * @throws 若未初始化则抛出错误。
+   */
+  public close(): Promise<void>;
+  public close(callback: (error?: Error) => void);
+  public closeSync();
 }

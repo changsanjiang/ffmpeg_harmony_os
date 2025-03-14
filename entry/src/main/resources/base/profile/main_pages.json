@@ -1,6 +1,7 @@
 {
   "src": [
     "pages/Index",
-    "pages/AudioPlayerDemo"
+    "pages/AudioPlayerDemo",
+    "pages/AudioWriterDemo"
   ]
 }

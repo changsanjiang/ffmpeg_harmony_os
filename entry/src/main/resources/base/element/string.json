@@ -11,6 +11,10 @@
     {
       "name": "EntryAbility_label",
       "value": "ffmpeg"
+    },
+    {
+      "name": "permission_MICROPHONE_reason",
+      "value": "需要使用麦克风进行音频录制"
     }
   ]
 }

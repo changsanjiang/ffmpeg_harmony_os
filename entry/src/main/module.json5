@@ -9,6 +9,13 @@
       "tablet",
       "2in1"
     ],
+    "requestPermissions": [
+      {
+        "name": "ohos.permission.MICROPHONE",
+        "reason": "$string:permission_MICROPHONE_reason",
+        "usedScene": {"when": "inuse"}
+      }
+    ],
     "deliveryWithInstall": true,
     "installationFree": false,
     "pages": "$profile:main_pages",

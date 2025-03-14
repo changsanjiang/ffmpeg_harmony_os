@@ -26,6 +26,7 @@
 #include "av/core/AudioFifo.h"
 #include "av/core/MediaDecoder.h"
 #include "av/core/FilterGraph.h"
+#include <ohaudio/native_audiostream_base.h>
 
 namespace FFAV {
 
@@ -43,6 +44,8 @@ public:
         const std::string& buf_sink_name,
         FilterFrameCallback callback
     );
+    
+    static AVSampleFormat ohToAVSampleFormat(OH_AudioStream_SampleFormat fmt);
 
 private:
     static int process_decoded_frames(

@@ -44,6 +44,20 @@ struct Index {
               console.error(`Failed to jump to the second page. Code is ${err.code}, message is ${err.message}`)
             })
           })
+
+        Text('FFAudioWriter Demo')
+          .id('根据目标文件名自动选择合适的封装格式，将 PCM 音频数据编码后写入到目标文件。')
+          .fontSize(20)
+          .fontWeight(FontWeight.Bold)
+          .onClick(() => {
+            console.info("onClick");
+
+            router.pushUrl({ url: 'pages/AudioWriterDemo' }).then(() => {
+              console.info('Succeeded in jumping to the second page.')
+            }).catch((err: BusinessError) => {
+              console.error(`Failed to jump to the second page. Code is ${err.code}, message is ${err.message}`)
+            })
+          })
       }
       .alignRules({
         center: { anchor: '__container__', align: VerticalAlign.Center },

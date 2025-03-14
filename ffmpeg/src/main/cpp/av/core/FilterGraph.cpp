@@ -21,7 +21,6 @@
 // please include "napi/native_api.h".
 
 #include "FilterGraph.h"
-#include "av/util/TaskScheduler.h"
 #include "extension/client_print.h"
 #include <sstream>
 

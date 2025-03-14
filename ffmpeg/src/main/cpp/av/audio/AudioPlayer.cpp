@@ -51,6 +51,7 @@ AudioPlayer::~AudioPlayer() {
     }
     
     if ( recreate_reader_scheduler) {
+        // 尝试取消; 可能此时还在延迟等待中, 直接取消即可;
         recreate_reader_scheduler->tryCancel();
     }
     
@@ -448,7 +449,7 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* writ
     // 当调用 playImmediately 或解码 eof 时直接播放
     bool play_immediate = (flags.should_play_immediate && nb_fifo_samples >= render_frame_size) || flags.is_dec_eof;
     // 是否能够尽可能的流畅播放
-    bool keep_up_likely = playable_duration_ms - current_time_ms > 3000;
+    bool keep_up_likely = (playable_duration_ms - current_time_ms) > 3000 || flags.is_read_eof;
     
     // reset flags
     if ( is_fifo_underflow && flags.should_drain_fifo ) {
