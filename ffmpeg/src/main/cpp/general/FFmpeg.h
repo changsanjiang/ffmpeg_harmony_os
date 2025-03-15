@@ -31,6 +31,9 @@ public:
     static napi_value Init(napi_env env, napi_value exports);
     
 private:
+    //  export function setFontConfigDir(dir: string);
+    static napi_value SetFontConfigDir(napi_env env, napi_callback_info info);
+    //  export function execute(commands: string[], options?: Options): Promise<void>;
     static napi_value Execute(napi_env env, napi_callback_info info);
     
     static void AsyncExecuteCallback(napi_env env, void *data);
@@ -39,6 +42,9 @@ private:
     static void InvokeLogCallback(napi_env env, napi_value js_callback, void* context, void* data);
     static void InvokeProgressCallback(napi_env env, napi_value js_callback, void* context, void* data);
     static void InvokeOutputCallback(napi_env env, napi_value js_callback, void* context, void* data);
+    
+    static void SetFontConfigDefaultDir();
+    static void SetEnv(const char* name, const char* value);
 };
 
 }

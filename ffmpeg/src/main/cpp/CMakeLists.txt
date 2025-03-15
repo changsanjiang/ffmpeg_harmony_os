@@ -28,6 +28,8 @@ target_link_libraries(ffmpeg PRIVATE libohaudio.so)
 target_link_libraries(ffmpeg PRIVATE libhilog_ndk.z.so)
 # NetConnection
 target_link_libraries(ffmpeg PRIVATE libnet_connection.so)
+# libz.so
+target_link_libraries(ffmpeg PRIVATE libz.so)
 
 #修改文件CMakeLists.txt
 #因为此三方库中存在汇编编译的部分，所以需要修改CFLAGS参考如下，符号不可抢占且优先使用本地符号
@@ -51,7 +53,6 @@ target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/font
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/freetype2/${OHOS_ARCH}/lib/libfreetype.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/fribidi/${OHOS_ARCH}/lib/libfribidi.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/harfbuzz/${OHOS_ARCH}/lib/libharfbuzz.a)
-#target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/json-c/${OHOS_ARCH}/lib/libjson-c.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/lame/${OHOS_ARCH}/lib/libmp3lame.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libaom/${OHOS_ARCH}/lib/libaom.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libass/${OHOS_ARCH}/lib/libass.a)
@@ -62,7 +63,6 @@ target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libv
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libvorbis/${OHOS_ARCH}/lib/libvorbisenc.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libvorbis/${OHOS_ARCH}/lib/libvorbisfile.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libxml2/${OHOS_ARCH}/lib/libxml2.a)
-#target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libzip/${OHOS_ARCH}/lib/libzip.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/opencore-amr/${OHOS_ARCH}/lib/libopencore-amrnb.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/opencore-amr/${OHOS_ARCH}/lib/libopencore-amrwb.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/openssl_3_4_0/${OHOS_ARCH}/lib/libcrypto.a)
@@ -73,8 +73,6 @@ target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/x264
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/x265/${OHOS_ARCH}/lib/libx265.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/xz/${OHOS_ARCH}/lib/liblzma.a)
 target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/zimg/${OHOS_ARCH}/lib/libzimg.a)
-target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/zlib/${OHOS_ARCH}/lib/libz.a)
-#target_link_libraries(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/zstd/${OHOS_ARCH}/lib/libzstd.a)
 
 #将三方库的头文件加入工程中
 target_include_directories(ffmpeg PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/FFmpeg/${OHOS_ARCH}/include)

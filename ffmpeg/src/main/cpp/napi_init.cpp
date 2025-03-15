@@ -15,6 +15,9 @@
     along with @sj/ffmpeg. If not, see <http://www.gnu.org/licenses/>.
  * */
 #include "general/FFAbortController.h"
+#if __has_include("general/FFAudioMultiStreamPlayer.h")
+#include "general/FFAudioMultiStreamPlayer.h"
+#endif
 #include "general/FFAudioPlayer.h"
 #include "general/FFAudioWriter.h"
 #include "general/FFPlayWhenReadyChangeReason.h"
@@ -28,6 +31,9 @@ static napi_value Init(napi_env env, napi_value exports)
     FFAV::FFAudioPlayer::Init(env, exports);
     FFAV::FFAbortController::Init(env, exports);
     FFAV::FFPlayWhenReadyChangeReason::Init(env, exports);
+#if __has_include("general/FFAudioMultiStreamPlayer.h")
+    FFAV::FFAudioMultiStreamPlayer::Init(env, exports);
+#endif
     FFAV::FFAudioWriter::Init(env, exports);
     return exports;
 }

@@ -22,6 +22,7 @@
 
 #include "FFmpeg.h"
 #include <cstdint>
+#include <cstdio>
 #include "FFAbortController.h"
 #include "extension/client_print.h"
 #include "extension/ff_ctx.h"
@@ -29,6 +30,11 @@
 EXTERN_C_START
 #include "libavutil/error.h"
 #include <stdatomic.h>
+#include <sys/stat.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <string>
 
 int ffmpeg_main(_Atomic bool *is_running, int argc, char **argv);
 int ffporbe_main(_Atomic bool *is_running, int argc, char **argv);
@@ -36,7 +42,7 @@ EXTERN_C_END
 
 namespace FFAV { 
 
-struct FFmpegContext {
+struct FFmpegExecutionData {
     char** cmds = nullptr;
     uint32_t cmds_count = 0;
     bool is_ffmpeg;
@@ -46,6 +52,7 @@ struct FFmpegContext {
     napi_threadsafe_function progress_callback_ref = nullptr; // (msg: string) => void
     napi_threadsafe_function output_callback_ref = nullptr; // (msg: string) => void
     napi_ref abort_signal_ref = nullptr;
+    FFAbortSignal* abort_signal = nullptr;
     
     napi_async_work async_work = nullptr;
     napi_deferred deferred = nullptr;
@@ -58,6 +65,7 @@ napi_value FFmpeg::Init(napi_env env, napi_value exports) {
     napi_create_object(env, &ffmpeg_namespace);
     
     napi_property_descriptor properties[] = {
+        {"setFontConfigDir", nullptr, SetFontConfigDir, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"execute", nullptr, Execute, nullptr, nullptr, nullptr, napi_default, nullptr}
     };
 
@@ -65,10 +73,42 @@ napi_value FFmpeg::Init(napi_env env, napi_value exports) {
     napi_define_properties(env, ffmpeg_namespace, property_count, properties);
     
     napi_set_named_property(env, exports, "FFmpeg", ffmpeg_namespace);
+    
+    SetFontConfigDefaultDir();
     return exports;
 }
 
-// commands: string[], options?: Options
+//  export function setFontConfigDir(dir: string);
+napi_value FFmpeg::SetFontConfigDir(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    int dir_value_idx = 0;
+    
+    napi_value args[argc];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    
+    napi_valuetype dir_valuetype;
+    napi_typeof(env, args[dir_value_idx], &dir_valuetype);
+
+   if ( dir_valuetype != napi_string ) {
+        napi_throw_error(env, nullptr, "Invalid argument: dir must be a string");
+        return nullptr;
+    }
+    
+    size_t dir_len = 0;
+    napi_get_value_string_utf8(env, args[dir_len], nullptr, 0, &dir_len);
+    if ( dir_len == 0 ) {
+        napi_throw_error(env, nullptr, "Invalid argument: dir cannot be an empty string");
+        return nullptr;
+    }
+    
+    std::string dir(dir_len, '\0'); 
+    napi_get_value_string_utf8(env, args[dir_len], &dir[0], dir_len + 1, &dir_len);
+
+    SetEnv("FONTCONFIG_PATH", dir.c_str());
+    return nullptr;
+}
+
+//  export function execute(commands: string[], options?: Options): Promise<void>;
 napi_value FFmpeg::Execute(napi_env env, napi_callback_info info) {     
     napi_deferred deferred = nullptr;
     napi_value promise = nullptr;
@@ -124,6 +164,7 @@ napi_value FFmpeg::Execute(napi_env env, napi_callback_info info) {
     napi_threadsafe_function progress_callback_ref = nullptr;
     napi_threadsafe_function output_callback_ref = nullptr;
     napi_ref abort_signal_ref = nullptr;
+    FFAbortSignal* abort_signal = nullptr;
 
     napi_value opts = args[opts_index];
     napi_value opt_value;
@@ -159,85 +200,80 @@ napi_value FFmpeg::Execute(napi_env env, napi_callback_info info) {
     napi_get_named_property(env, opts, "signal", &opt_value);
     napi_typeof(env, opt_value, &opt_valuetype);
     if ( opt_valuetype == napi_object ) {
+        napi_unwrap(env, opt_value, (void**)abort_signal);
         napi_create_reference(env, opt_value, 1, &abort_signal_ref);
     }
     
-    FFmpegContext* ctx = new FFmpegContext();
-    ctx->cmds = cmds;
-    ctx->cmds_count = cmds_count;
-    ctx->is_ffmpeg = is_ffmpeg;
-    ctx->is_running = true;
-    ctx->log_callback_ref = log_callback_ref;
-    ctx->progress_callback_ref = progress_callback_ref;
-    ctx->output_callback_ref = output_callback_ref;
-    ctx->abort_signal_ref = abort_signal_ref;
-    ctx->deferred = deferred;
-    ctx->ff_ret = 0;
+    FFmpegExecutionData* d = new FFmpegExecutionData();
+    d->cmds = cmds;
+    d->cmds_count = cmds_count;
+    d->is_ffmpeg = is_ffmpeg;
+    d->is_running = true;
+    d->log_callback_ref = log_callback_ref;
+    d->progress_callback_ref = progress_callback_ref;
+    d->output_callback_ref = output_callback_ref;
+    d->abort_signal_ref = abort_signal_ref;
+    d->abort_signal = abort_signal;
+    d->deferred = deferred;
+    d->ff_ret = 0;
     
     napi_value async_resource_name;
     napi_create_string_utf8(env, "ffmpeg", NAPI_AUTO_LENGTH, &async_resource_name);
     
     // 创建异步任务
-    napi_create_async_work(env, nullptr, async_resource_name, FFmpeg::AsyncExecuteCallback, FFmpeg::AsyncCompleteCallback, ctx, &ctx->async_work);
-    napi_queue_async_work(env, ctx->async_work);
+    napi_create_async_work(env, nullptr, async_resource_name, FFmpeg::AsyncExecuteCallback, FFmpeg::AsyncCompleteCallback, d, &d->async_work);
+    napi_queue_async_work(env, d->async_work);
     return promise;
 }
 
 void FFmpeg::AsyncExecuteCallback(napi_env env, void *data) {
-    FFmpegContext* ctx = reinterpret_cast<FFmpegContext *>(data);
-    if ( atomic_load(&ctx->is_running) ) {
-        FFAbortSignal* signal = nullptr;
-        if ( ctx->abort_signal_ref ) {
-            napi_value abort_signal;
-            napi_get_reference_value(env, ctx->abort_signal_ref, &abort_signal);
-            napi_unwrap(env, abort_signal, reinterpret_cast<void**>(&signal));
-            signal->setAbortedCallback([&](napi_ref reason_ref) {
-                atomic_store(&ctx->is_running, false);
-            });
-        }
+    FFmpegExecutionData* d = reinterpret_cast<FFmpegExecutionData *>(data);
+    if ( atomic_load(&d->is_running) ) {
+        FFAbortSignal* signal = d->abort_signal;
+        if ( signal ) signal->setAbortedCallback([&](napi_ref reason_ref) {
+            atomic_store(&d->is_running, false);
+        });
         
         // init
-        ff_ctx_init(ctx->log_callback_ref, ctx->progress_callback_ref, ctx->output_callback_ref);
+        ff_ctx_init(d->log_callback_ref, d->progress_callback_ref, d->output_callback_ref);
         
         // execute cmds
-        ctx->ff_ret = ctx->is_ffmpeg ? ffmpeg_main(&ctx->is_running, ctx->cmds_count, ctx->cmds) : 
-                                       ffporbe_main(&ctx->is_running, ctx->cmds_count, ctx->cmds);
+        d->ff_ret = d->is_ffmpeg ? ffmpeg_main(&d->is_running, d->cmds_count, d->cmds) : 
+                                   ffporbe_main(&d->is_running, d->cmds_count, d->cmds);
         
         if ( signal ) signal->setAbortedCallback(nullptr);
+        ff_ctx_release();
     }
-
-    // clear partial res
-    napi_delete_reference(env, ctx->abort_signal_ref);
-    ff_ctx_release();
-    for (size_t i = 0; i < ctx->cmds_count; ++i) {
-        delete[] ctx->cmds[i];
-    }
-    delete[] ctx->cmds;
 }
 
 void FFmpeg::AsyncCompleteCallback(napi_env env, napi_status status, void *data) {
-    FFmpegContext* ctx = reinterpret_cast<FFmpegContext *>(data);
-    if ( !atomic_load(&ctx->is_running) || ctx->ff_ret == 255 ) {
+    FFmpegExecutionData* d = reinterpret_cast<FFmpegExecutionData *>(data);
+    if ( !atomic_load(&d->is_running) || d->ff_ret == 255 ) {
         napi_value error, error_code, error_msg;
         napi_create_string_utf8(env, "FF_CANCELLED_ERR", NAPI_AUTO_LENGTH, &error_code);
         napi_create_string_utf8(env, "Execution cancelled by user", NAPI_AUTO_LENGTH, &error_msg);
         napi_create_type_error(env, error_code, error_msg, &error);
-        napi_reject_deferred(env, ctx->deferred, error);
+        napi_reject_deferred(env, d->deferred, error);
     }
-    else if ( ctx->ff_ret < 0 ) {
+    else if ( d->ff_ret < 0 ) {
         napi_value error, error_code, error_msg;
         napi_create_string_utf8(env, "FF_GENERIC_ERR", NAPI_AUTO_LENGTH, &error_code);
-        napi_create_string_utf8(env, av_err2str(ctx->ff_ret), NAPI_AUTO_LENGTH, &error_msg);
+        napi_create_string_utf8(env, av_err2str(d->ff_ret), NAPI_AUTO_LENGTH, &error_msg);
         napi_create_type_error(env, error_code, error_msg, &error);
-        napi_reject_deferred(env, ctx->deferred, error);
+        napi_reject_deferred(env, d->deferred, error);
     }
     else {
         napi_value undefined;
         napi_get_undefined(env, &undefined);
-        napi_resolve_deferred(env, ctx->deferred, undefined);
+        napi_resolve_deferred(env, d->deferred, undefined);
     }
-    napi_delete_async_work(env, ctx->async_work);
-    delete ctx;
+    for (size_t i = 0; i < d->cmds_count; ++i) {
+        delete[] d->cmds[i];
+    }
+    delete[] d->cmds;
+    if ( d->abort_signal_ref ) napi_delete_reference(env, d->abort_signal_ref);
+    napi_delete_async_work(env, d->async_work);
+    delete d;
 }
 
 // (level: number, msg: string) => void
@@ -270,6 +306,45 @@ void FFmpeg::InvokeOutputCallback(napi_env env, napi_value js_callback, void* co
     napi_create_string_utf8(env, obj->c_str(), obj->length(), &msg);
     napi_call_function(env, global, js_callback, 1, &msg, nullptr);
     delete obj;
+}
+
+void FFmpeg::SetFontConfigDefaultDir() {
+    const char* root_dir = "/data/storage/el2/base/files/sj_ff_av";
+    struct stat info;
+    if ( stat(root_dir, &info) != 0 ) {
+        if ( mkdir(root_dir, 0755) != 0 ) {
+            return;
+        }
+    }
+
+    std::string font_cfg_default_file_path = std::string(root_dir) + "/fonts.conf";
+    if ( stat(font_cfg_default_file_path.c_str(), &info) == 0 ) {
+        return;  
+    }
+
+    FILE* file = fopen(font_cfg_default_file_path.c_str(), "w");
+    if ( !file ) {
+        return;
+    }
+
+    if ( fprintf(file,
+            "<?xml version=\"1.0\"?>"
+            "<!DOCTYPE fontconfig SYSTEM \"fonts.dtd\">"
+            "<fontconfig>"
+                "<dir>/system/fonts</dir>"
+            "</fontconfig>" 
+    ) < 0 ) {
+        fclose(file);
+        return;
+    }
+
+    fclose(file);
+
+    SetEnv("FONTCONFIG_PATH", root_dir);
+}
+
+void FFmpeg::SetEnv(const char *name, const char *value) {
+    setenv(name, value, true);
 }
 
 }

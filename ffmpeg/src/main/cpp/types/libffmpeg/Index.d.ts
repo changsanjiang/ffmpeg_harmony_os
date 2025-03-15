@@ -17,6 +17,8 @@
 import { audio } from '@kit.AudioKit';
 
 export namespace FFmpeg {
+  export function setFontConfigPath(dir: string);
+
   export interface Options {
     logCallback?: (level: number, msg: string) => void
     /** 这个回调是 ffmpeg 进度消息的回调, 请在执行 ffmpeg 命令时设置; */

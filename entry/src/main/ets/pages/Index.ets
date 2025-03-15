@@ -12,6 +12,7 @@ struct Index {
 
   private mp4Path = getContext(this).filesDir + '/input.mp4';
   private gifPath = getContext(this).filesDir + '/loading.gif';
+  private subtitlesPath = getContext(this).filesDir + '/subtitles.srt';
 
   build() {
     RelativeContainer() {
@@ -28,7 +29,8 @@ struct Index {
             // this.test4();
             // this.test5();
             // this.test6();
-            this.test7();
+            // this.test7();
+            this.test8();
           })
 
         Text('FFAudioPlayer Demo')
@@ -76,6 +78,7 @@ struct Index {
 
     FileMgr.copyRawFileToPath(getContext(this), 'input.mp4', this.mp4Path, { checkExistence: true, returnIfExists: true });
     FileMgr.copyRawFileToPath(getContext(this), 'loading.gif', this.gifPath, { checkExistence: true, returnIfExists: true });
+    FileMgr.copyRawFileToPath(getContext(this), 'subtitles.srt', this.subtitlesPath, { checkExistence: true, returnIfExists: true });
   }
 
   test1() {
@@ -233,6 +236,33 @@ struct Index {
     let outputPath = cacheDir + `/output_7.wav`;
     // 将音频的播放速度加快 1.5 倍，同时保持音高不变。
     let commands = ["ffmpeg", "-i", inputPath, "-filter_complex", "rubberband=tempo=1.5", outputPath, "-y", "-v", "info"];
+
+    console.log(`[Commands] ${commands.join(" ")}`);
+
+    FFmpeg.execute(commands, {
+      logCallback: (logLevel: number, logMessage: string) => console.log(`[${logLevel}]${logMessage}`),
+      progressCallback: (message: string) => {
+        this.message = message;
+        console.log(`[progress]${JSON.stringify(FFProgressMessageParser.parse(message))}`);
+      },
+    }).then(() => {
+      this.message = `Execution succeeded with outputPath: ${outputPath}`;
+      console.info(this.message);
+    }).catch((error: Error) => {
+      this.message = `Execution failed with error: ${error.message}`;
+      console.error(`Execution failed with error: ${error.message}`);
+    });
+  }
+
+  // 测试添加字幕
+  test8() {
+    let cacheDir = getContext(this).cacheDir;
+    let inputPath = this.mp4Path; // 输入文件的路径, 可以是本地路径也可以是远程路径;
+    let outputPath = cacheDir + `/output_8.mp4`;
+    // 使用 FFmpeg 加载字幕
+    // ffmpeg -i input.mp4 -vf "subtitles=subtitles.srt:fontsdir=/path/to/fonts:force_style='FontName=custom_font.ttf'" -c:a copy output.mp4
+    // :fontfile=/system/fonts/HarmonyOS_Sans_SC.ttf:fontcolor=white:fontsize=24:x=10:y=10", "-codec:a", "copy", outputPath, "-y", "-v", "info"];
+    let commands = ["ffmpeg", "-i", inputPath, "-vf", `subtitles=${this.subtitlesPath}:force_style='Fontname=HarmonyOS Sans SC'`, "-c:a", "copy", outputPath, "-y", "-v", "info"];
 
     console.log(`[Commands] ${commands.join(" ")}`);
 
