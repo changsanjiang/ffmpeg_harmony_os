@@ -144,61 +144,61 @@ ohpm i @sj/ffmpeg
 FFAudioWriter 该类用于接收原始 PCM 数据, 会将其编码为指定的目标格式(如 AAC、MP3、WAV), 并封装到目标文件.
 
 - 初始化
-```typescript
-  // 原始数据的 PCM 音频参数
-  const audioStreamInfo: audio.AudioStreamInfo = {
-    samplingRate: audio.AudioSamplingRate.SAMPLE_RATE_48000,
-    channels: audio.AudioChannel.CHANNEL_2,
-    sampleFormat: audio.AudioSampleFormat.SAMPLE_FORMAT_S16LE,
-    encodingType: audio.AudioEncodingType.ENCODING_TYPE_RAW
-  };
-
-  // 保存路径; 编码封装格式为 mp3;
-  // FFAudioWriter 会根据目标文件名自动选择合适的封装格式, 所以目标文件名必须包含正确的文件后缀(如 `.mp4`、`.aac`、`.wav`), 以便自动推测编码封装格式.
-  const outputPath = getContext(this).filesDir + '/output.mp3'; 
-
-  // 创建 FFAudioWriter
-  this.mAudioWriter = new FFAudioWriter(outputPath);
-  // 同步方式初始化, 也可以调用异步方式初始化.
-  try {
-    this.mAudioWriter.prepareSync(audioStreamInfo); 
-  }
-  catch (error) {
-    this.stopCapture(error);
-    return;
-  }
-```
-
-- 实时编码、封装
-```typescript
-  // 这里以音频录制的回调举例, 当有新的 PCM 数据时, 实时传递给 FFAudioWriter 即可;
-  audioCapturer.on('readData', async (buffer) => {
-    // 同步方式写入数据
-    // 传入的 PCM 数据将被编码为目标格式的数据并被封装写入到目标文件中.
+  ```typescript
+    // 原始数据的 PCM 音频参数
+    const audioStreamInfo: audio.AudioStreamInfo = {
+      samplingRate: audio.AudioSamplingRate.SAMPLE_RATE_48000,
+      channels: audio.AudioChannel.CHANNEL_2,
+      sampleFormat: audio.AudioSampleFormat.SAMPLE_FORMAT_S16LE,
+      encodingType: audio.AudioEncodingType.ENCODING_TYPE_RAW
+    };
+  
+    // 保存路径; 编码封装格式为 mp3;
+    // FFAudioWriter 会根据目标文件名自动选择合适的封装格式, 所以目标文件名必须包含正确的文件后缀(如 `.mp4`、`.aac`、`.wav`), 以便自动推测编码封装格式.
+    const outputPath = getContext(this).filesDir + '/output.mp3'; 
+  
+    // 创建 FFAudioWriter
+    this.mAudioWriter = new FFAudioWriter(outputPath);
+    // 同步方式初始化, 也可以调用异步方式初始化.
     try {
-      this.mAudioWriter?.writeSync(buffer);
+      this.mAudioWriter.prepareSync(audioStreamInfo); 
     }
     catch (error) {
       this.stopCapture(error);
+      return;
     }
-  
-    // Promise 方式写入数据
-    // await this.mAudioWriter?.write(buffer).catch((error: Error) => {
-    //   this.stopCapture(error);
-    // });
-  
-    // 异步方式写入数据
-    // this.mAudioWriter?.write(buffer, (error) => {
-    //   if ( error ) {
-    //     this.stopCapture(error);
-    //   }
-    // });
-  });
-```
+  ```
+
+- 实时编码、封装
+  ```typescript
+    // 这里以音频录制的回调举例, 当有新的 PCM 数据时, 实时传递给 FFAudioWriter 即可;
+    audioCapturer.on('readData', async (buffer) => {
+      // 同步方式写入数据
+      // 传入的 PCM 数据将被编码为目标格式的数据并被封装写入到目标文件中.
+      try {
+        this.mAudioWriter?.writeSync(buffer);
+      }
+      catch (error) {
+        this.stopCapture(error);
+      }
+    
+      // Promise 方式写入数据
+      // await this.mAudioWriter?.write(buffer).catch((error: Error) => {
+      //   this.stopCapture(error);
+      // });
+    
+      // 异步方式写入数据
+      // this.mAudioWriter?.write(buffer, (error) => {
+      //   if ( error ) {
+      //     this.stopCapture(error);
+      //   }
+      // });
+    });
+  ```
 
 - 关闭
-```typescript
-    // 没有更多数据时, 请调用关闭以写入文件尾部并释放相关资源。
-    this.mAudioWriter?.closeSync();
-    this.mAudioWriter = undefined;
-```
+  ```typescript
+      // 没有更多数据时, 请调用关闭以写入文件尾部并释放相关资源。
+      this.mAudioWriter?.closeSync();
+      this.mAudioWriter = undefined;
+  ```
