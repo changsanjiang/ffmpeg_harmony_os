@@ -447,9 +447,9 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* writ
     bool should_drain_fifo = flags.should_drain_fifo;
     // 是否需要尽快播放
     // 当调用 playImmediately 或解码 eof 时直接播放
-    bool play_immediate = (flags.should_play_immediate && nb_fifo_samples >= render_frame_size) || flags.is_dec_eof;
+    bool play_immediate = (flags.should_play_immediate && nb_fifo_samples >= render_frame_size) || flags.is_read_eof;
     // 是否能够尽可能的流畅播放
-    bool keep_up_likely = (playable_duration_ms - current_time_ms) > 3000 || flags.is_read_eof;
+    bool keep_up_likely = (playable_duration_ms - current_time_ms) > 3000;
     
     // reset flags
     if ( is_fifo_underflow && flags.should_drain_fifo ) {
