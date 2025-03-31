@@ -219,7 +219,6 @@ void AudioPlayer::onReaderReadyToReadCallback(AudioReader* reader, AVStream* str
     audio_decoder = new AudioDecoder();
     int ff_ret = audio_decoder->init(stream->codecpar, audio_stream_time_base, output_sample_format);
     if ( ff_ret < 0 ) {
-        lock.unlock();
         onFFmpegError(ff_ret);
         return;
     }
@@ -232,7 +231,6 @@ void AudioPlayer::onReaderReadyToReadCallback(AudioReader* reader, AVStream* str
     audio_fifo = new AudioFifo();
     ff_ret = audio_fifo->init(output_sample_format, output_nb_channels, 1);
     if ( ff_ret < 0 ) {
-        lock.unlock();
         onFFmpegError(ff_ret);
         return;
     }
@@ -245,7 +243,6 @@ void AudioPlayer::onReaderReadyToReadCallback(AudioReader* reader, AVStream* str
     audio_renderer = new AudioRenderer();
     OH_AudioStream_Result render_ret = audio_renderer->init(output_render_sample_format, output_sample_rate, output_nb_channels);
     if ( render_ret != AUDIOSTREAM_SUCCESS ) {
-        lock.unlock();
         onRenderError(render_ret);
         return;
     }
@@ -310,6 +307,7 @@ void AudioPlayer::onReaderReadPacketCallback(AudioReader* reader, AVPacket* pkt,
 
 void AudioPlayer::onReaderErrorCallback(AudioReader* reader, int ff_err) {
     client_print_message3("AAAAA: onReaderErrorCallback(%d), %s", ff_err, av_err2str(ff_err));
+    std::unique_lock<std::mutex> lock(mtx);
    
     if ( ff_err == AVERROR(EIO) ||
          ff_err == AVERROR(ENETDOWN) || 
@@ -321,7 +319,6 @@ void AudioPlayer::onReaderErrorCallback(AudioReader* reader, int ff_err) {
          ff_err == AVERROR(EHOSTUNREACH) ||
          ff_err == AVERROR_INVALIDDATA
         ) {
-        std::unique_lock<std::mutex> lock(mtx);
         flags.should_recreate_reader = true;
         
         NetworkStatus network_status = NetworkReachability::shared().getStatus();
@@ -616,7 +613,6 @@ void AudioPlayer::onRenderError(OH_AudioStream_Result error) {
 }
 
 void AudioPlayer::onError(std::shared_ptr<Error> error) {
-    std::unique_lock<std::mutex> lock(mtx);
     if ( flags.has_error || flags.release_invoked ) {
         return;
     }
