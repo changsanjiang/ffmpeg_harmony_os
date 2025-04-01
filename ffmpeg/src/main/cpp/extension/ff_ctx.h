@@ -26,30 +26,32 @@
 #include <string>
 
 EXTERN_C_START
+#include <stdatomic.h>
+
+typedef struct {
+    atomic_int* pendingCallbacks;
+    std::string msg;
+    int level;
+} FFCallbackData;
 
 void 
-ff_ctx_init(
+ff_set_callback_refs(
     napi_threadsafe_function log_callback_ref,
     napi_threadsafe_function progress_callback_ref,
     napi_threadsafe_function output_callback_ref
 );
 
-napi_threadsafe_function
-ff_ctx_get_log_callback_ref(void);
+void 
+ff_invoke_log_callback(int level, const char *message);
 
-napi_threadsafe_function
-ff_ctx_get_progress_callback_ref(void);
-
-napi_threadsafe_function
-ff_ctx_get_output_callback_ref(void);
+void
+ff_invoke_progress_callback(const char *message);
 
 void 
-ff_ctx_release(void);
+ff_invoke_output_callback(const char *message);
 
-typedef struct {
-    int level;
-    std::string msg;
-} FFLog;
+void 
+ff_wait_callbacks();
 
 EXTERN_C_END
 

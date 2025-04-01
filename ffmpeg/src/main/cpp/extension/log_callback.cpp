@@ -26,9 +26,7 @@
 EXTERN_C_START
 static void 
 native_log_callback(int level, const char *message) {
-    napi_threadsafe_function log_callback_ref = ff_ctx_get_log_callback_ref();
-    if ( log_callback_ref == nullptr ) return;
-    napi_call_threadsafe_function(log_callback_ref, new FFLog { level, message }, napi_tsfn_nonblocking);
+    ff_invoke_log_callback(level, message);
 }
 
 static char *

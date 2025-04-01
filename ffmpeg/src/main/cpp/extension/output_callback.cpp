@@ -26,8 +26,6 @@
 EXTERN_C_START
 void
 native_report_output(const char *message) {
-    napi_threadsafe_function output_callback_ref = ff_ctx_get_output_callback_ref();
-    if ( output_callback_ref == nullptr ) return;
-    napi_call_threadsafe_function(output_callback_ref, new std::string(message), napi_tsfn_nonblocking);
+    ff_invoke_output_callback(message);
 }
 EXTERN_C_END

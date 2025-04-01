@@ -49,25 +49,3 @@ private:
 
 }
 #endif //FFMPEGPROJ_FFMPEG_H
-
-
-//static void ExecuteCB(napi_env env, void *data)
-//{
-//    CallbackData *callbackData = reinterpret_cast<CallbackData *>(data);
-//    callbackData->result = callbackData->args;
-//}
-//
-//static void CompleteCB(napi_env env, napi_status status, void *data)
-//{
-//    CallbackData *callbackData = reinterpret_cast<CallbackData *>(data);
-//    napi_value result = nullptr;
-//    napi_create_double(env, callbackData->result, &result);
-//    if (callbackData->result > 0) {
-//        napi_resolve_deferred(env, callbackData->deferred, result);
-//    } else {
-//        napi_reject_deferred(env, callbackData->deferred, result);
-//    }
-//
-//    napi_delete_async_work(env, callbackData->asyncWork);
-//    delete callbackData;
-//}

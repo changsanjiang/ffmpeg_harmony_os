@@ -235,14 +235,16 @@ void FFmpeg::AsyncExecuteCallback(napi_env env, void *data) {
         });
         
         // init
-        ff_ctx_init(d->log_callback_ref, d->progress_callback_ref, d->output_callback_ref);
+        ff_set_callback_refs(d->log_callback_ref, d->progress_callback_ref, d->output_callback_ref);
         
         // execute cmds
         d->ff_ret = d->is_ffmpeg ? ffmpeg_main(&d->is_running, d->cmds_count, d->cmds) : 
                                    ffporbe_main(&d->is_running, d->cmds_count, d->cmds);
         
+        ff_wait_callbacks();
+        ff_set_callback_refs(nullptr, nullptr, nullptr);
+        
         if ( signal ) signal->setAbortedCallback(nullptr);
-        ff_ctx_release();
     }
 }
 
@@ -255,7 +257,7 @@ void FFmpeg::AsyncCompleteCallback(napi_env env, napi_status status, void *data)
         napi_create_type_error(env, error_code, error_msg, &error);
         napi_reject_deferred(env, d->deferred, error);
     }
-    else if ( d->ff_ret < 0 ) {
+    else if ( d->ff_ret != 0 ) {
         napi_value error, error_code, error_msg;
         napi_create_string_utf8(env, "FF_GENERIC_ERR", NAPI_AUTO_LENGTH, &error_code);
         napi_create_string_utf8(env, av_err2str(d->ff_ret), NAPI_AUTO_LENGTH, &error_msg);
@@ -271,6 +273,9 @@ void FFmpeg::AsyncCompleteCallback(napi_env env, napi_status status, void *data)
         delete[] d->cmds[i];
     }
     delete[] d->cmds;
+    if ( d->log_callback_ref ) napi_release_threadsafe_function(d->log_callback_ref, napi_tsfn_release);
+    if ( d->progress_callback_ref ) napi_release_threadsafe_function(d->progress_callback_ref, napi_tsfn_release);
+    if ( d->output_callback_ref ) napi_release_threadsafe_function(d->output_callback_ref, napi_tsfn_release);
     if ( d->abort_signal_ref ) napi_delete_reference(env, d->abort_signal_ref);
     napi_delete_async_work(env, d->async_work);
     delete d;
@@ -278,34 +283,37 @@ void FFmpeg::AsyncCompleteCallback(napi_env env, napi_status status, void *data)
 
 // (level: number, msg: string) => void
 void FFmpeg::InvokeLogCallback(napi_env env, napi_value js_callback, void* context, void* data) {
-    FFLog* log = reinterpret_cast<FFLog*>(data);
+    FFCallbackData* ff_data = reinterpret_cast<FFCallbackData*>(data);
     napi_value global, level, msg;
     napi_get_global(env, &global);
-    napi_create_int32(env, log->level, &level);
-    napi_create_string_utf8(env, log->msg.c_str(), log->msg.length(), &msg);
+    napi_create_int32(env, ff_data->level, &level);
+    napi_create_string_utf8(env, ff_data->msg.c_str(), ff_data->msg.length(), &msg);
     napi_value args[] = { level, msg };
     napi_call_function(env, global, js_callback, 2, args, nullptr);
-    delete log;
+    atomic_fetch_sub(ff_data->pendingCallbacks, 1);
+    delete ff_data;
 }
 
 // (msg: string) => void
 void FFmpeg::InvokeProgressCallback(napi_env env, napi_value js_callback, void* context, void* data) {
-    std::string* obj = reinterpret_cast<std::string*>(data);
+    FFCallbackData* ff_data = reinterpret_cast<FFCallbackData*>(data);
     napi_value global, msg;
     napi_get_global(env, &global);
-    napi_create_string_utf8(env, obj->c_str(), obj->length(), &msg);
+    napi_create_string_utf8(env, ff_data->msg.c_str(), ff_data->msg.length(), &msg);
     napi_call_function(env, global, js_callback, 1, &msg, nullptr);
-    delete obj;
+    atomic_fetch_sub(ff_data->pendingCallbacks, 1);
+    delete ff_data;
 }
 
 // (msg: string) => void
 void FFmpeg::InvokeOutputCallback(napi_env env, napi_value js_callback, void* context, void* data) {
-    std::string* obj = reinterpret_cast<std::string*>(data);
+    FFCallbackData* ff_data = reinterpret_cast<FFCallbackData*>(data);
     napi_value global, msg;
     napi_get_global(env, &global);
-    napi_create_string_utf8(env, obj->c_str(), obj->length(), &msg);
+    napi_create_string_utf8(env, ff_data->msg.c_str(), ff_data->msg.length(), &msg);
     napi_call_function(env, global, js_callback, 1, &msg, nullptr);
-    delete obj;
+    atomic_fetch_sub(ff_data->pendingCallbacks, 1);
+    delete ff_data;
 }
 
 void FFmpeg::SetFontConfigDefaultDir() {

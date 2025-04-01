@@ -21,17 +21,19 @@
 // please include "napi/native_api.h".
 
 #include "ff_ctx.h"
+#include <unistd.h>  // for sleep (UNIX systems)
 
 EXTERN_C_START
 
 _Thread_local static struct {
+    atomic_int pendingCallbacks;
     napi_threadsafe_function log_callback_ref;
     napi_threadsafe_function progress_callback_ref;
     napi_threadsafe_function output_callback_ref;
-} ff_ctx = { nullptr, nullptr, nullptr }; 
+} ff_ctx = { 0, nullptr, nullptr, nullptr }; 
 
 void 
-ff_ctx_init(
+ff_set_callback_refs(
     napi_threadsafe_function log_callback_ref,
     napi_threadsafe_function progress_callback_ref,
     napi_threadsafe_function output_callback_ref
@@ -41,36 +43,29 @@ ff_ctx_init(
     ff_ctx.output_callback_ref = output_callback_ref;
 }
 
-napi_threadsafe_function
-ff_ctx_get_log_callback_ref(void) {
-    return ff_ctx.log_callback_ref;
-}
-
-napi_threadsafe_function
-ff_ctx_get_progress_callback_ref(void) {
-    return ff_ctx.progress_callback_ref;
-}
-
-napi_threadsafe_function
-ff_ctx_get_output_callback_ref(void) {
-    return ff_ctx.output_callback_ref;    
+void 
+ff_invoke_log_callback(int level, const char *message) {
+    atomic_fetch_add(&ff_ctx.pendingCallbacks, 1);
+    napi_call_threadsafe_function(ff_ctx.log_callback_ref, new FFCallbackData { &ff_ctx.pendingCallbacks, message, level }, napi_tsfn_blocking);
 }
 
 void 
-ff_ctx_release(void) {
-    if ( ff_ctx.log_callback_ref ) {
-        napi_release_threadsafe_function(ff_ctx.log_callback_ref, napi_tsfn_release);
-        ff_ctx.log_callback_ref = nullptr;
-    }
-    
-    if ( ff_ctx.progress_callback_ref ) {
-        napi_release_threadsafe_function(ff_ctx.progress_callback_ref, napi_tsfn_release);
-        ff_ctx.progress_callback_ref = nullptr;
-    }
-    
-    if ( ff_ctx.output_callback_ref ) {
-        napi_release_threadsafe_function(ff_ctx.output_callback_ref, napi_tsfn_release);
-        ff_ctx.output_callback_ref = nullptr;
+ff_invoke_progress_callback(const char *message) {
+    atomic_fetch_add(&ff_ctx.pendingCallbacks, 1);
+    napi_call_threadsafe_function(ff_ctx.progress_callback_ref, new FFCallbackData { &ff_ctx.pendingCallbacks, message, 0 }, napi_tsfn_blocking);
+}
+
+void 
+ff_invoke_output_callback(const char *message) {
+    atomic_fetch_add(&ff_ctx.pendingCallbacks, 1);
+    napi_call_threadsafe_function(ff_ctx.output_callback_ref, new FFCallbackData { &ff_ctx.pendingCallbacks, message, 0 }, napi_tsfn_blocking);
+}
+
+void 
+ff_wait_callbacks() {
+    while (atomic_load(&ff_ctx.pendingCallbacks) > 0) {
+        usleep(10 * 1000);  // 让出 CPU (10ms)
     }
 }
+
 EXTERN_C_END
