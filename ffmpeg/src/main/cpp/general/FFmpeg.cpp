@@ -200,7 +200,7 @@ napi_value FFmpeg::Execute(napi_env env, napi_callback_info info) {
     napi_get_named_property(env, opts, "signal", &opt_value);
     napi_typeof(env, opt_value, &opt_valuetype);
     if ( opt_valuetype == napi_object ) {
-        napi_unwrap(env, opt_value, (void**)abort_signal);
+        napi_unwrap(env, opt_value, reinterpret_cast<void**>(&abort_signal));
         napi_create_reference(env, opt_value, 1, &abort_signal_ref);
     }
     
