@@ -50,6 +50,7 @@ napi_value FFAudioPlayer::Init(napi_env env, napi_value exports) {
         { "currentTime", nullptr, nullptr, GetCurrentTime, nullptr, nullptr, napi_default, nullptr},
         { "playableDuration", nullptr, nullptr, GetPlayableDuration, nullptr, nullptr, napi_default, nullptr},
         { "error", nullptr, nullptr, GetError, nullptr, nullptr, napi_default, nullptr},
+        { "setDefaultOutputDevice", nullptr, SetDefaultOutputDevice, nullptr, nullptr, nullptr, napi_default, nullptr},
         { "prepare", nullptr, Prepare, nullptr, nullptr, nullptr, napi_default, nullptr},
         { "play", nullptr, Play, nullptr, nullptr, nullptr, napi_default, nullptr},
         { "pause", nullptr, Pause, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -162,7 +163,7 @@ napi_value FFAudioPlayer::SetUrl(napi_env env, napi_callback_info info) {
     napi_unwrap(env, js_this, reinterpret_cast<void**>(&obj));
     
     obj->url.clear();
-    obj->options.clear();
+    obj->options.reset();
     
     napi_valuetype urltype;
     napi_typeof(env, args[url_idx], &urltype);
@@ -182,13 +183,15 @@ napi_value FFAudioPlayer::SetUrl(napi_env env, napi_callback_info info) {
     napi_get_value_string_utf8(env, args[url_idx], &new_url[0], url_size + 1, &url_size);
     obj->url = std::move(new_url);  
     
+    
+    int64_t start_time_position_ms = 0;
+    std::map<std::string, std::string> http_options;
+    OH_AudioStream_Usage stream_usage = AUDIOSTREAM_USAGE_MUSIC;
+
     napi_value opts = args[opts_idx];
     napi_valuetype valuetype;
     napi_typeof(env, opts, &valuetype);
     if ( valuetype != napi_undefined ) {
-        int64_t start_time_position_ms = 0;
-        std::map<std::string, std::string> http_options;
-        
         napi_value opt;
         napi_get_named_property(env, opts, "startTimePosition", &opt);
         napi_typeof(env, opt, &valuetype);
@@ -215,9 +218,17 @@ napi_value FFAudioPlayer::SetUrl(napi_env env, napi_callback_info info) {
                 http_options[keyStr] = valueStr;
             }
         }
-        obj->options.start_time_position_ms = start_time_position_ms;
-        obj->options.http_options = std::move(http_options);
+        
+        napi_get_named_property(env, opts, "streamUsage", &opt);
+        napi_typeof(env, opt, &valuetype);
+        if ( valuetype != napi_undefined ) {
+            napi_get_value_int32(env, opt, (int32_t *)&stream_usage);
+        }
     }
+    
+    obj->options.start_time_position_ms = start_time_position_ms;
+    obj->options.http_options = std::move(http_options);
+    obj->options.stream_usage = stream_usage;
     return nullptr;
 }
 
@@ -343,6 +354,25 @@ napi_value FFAudioPlayer::SetSpeed(napi_env env, napi_callback_info info) {
     napi_unwrap(env, js_this, reinterpret_cast<void**>(&obj));
     
     obj->setSpeed(speed);
+    return nullptr;
+}
+
+napi_value FFAudioPlayer::SetDefaultOutputDevice(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    int device_type_idx = 0;
+
+    napi_value args[argc];
+    napi_value js_this;
+
+    napi_get_cb_info(env, info, &argc, args, &js_this, nullptr);
+    
+    int32_t device_type;
+    napi_get_value_int32(env, args[device_type_idx], &device_type);
+
+    FFAudioPlayer* obj;
+    napi_unwrap(env, js_this, reinterpret_cast<void**>(&obj));
+    
+    obj->setDeviceType(device_type);
     return nullptr;
 }
 
@@ -580,6 +610,7 @@ bool FFAudioPlayer::createPlayer() {
         player = new FFAV::AudioPlayer(url, options);
         if ( speed != 1 ) player->setSpeed(speed);
         if ( volume != 1 ) player->setVolume(volume);
+        if ( device_type != -1 ) player->setDefaultOutputDevice(device_type);
         player->setEventCallback(std::bind(&FFAudioPlayer::onPlayerEvent, this, std::placeholders::_1));
     }
     return player != nullptr;
@@ -627,7 +658,7 @@ void FFAudioPlayer::stop() {
     onPlayWhenReadyChange(false, FFAV::PlayWhenReadyChangeReason::USER_REQUEST);
     
     url.clear();
-    options.clear();
+    options.reset();
 }
 
 void FFAudioPlayer::seek(int64_t time_ms) {
@@ -658,6 +689,15 @@ void FFAudioPlayer::setSpeed(float speed) {
         this->speed = speed;
         if ( player ) {
             player->setSpeed(speed);
+        }
+    }
+}
+
+void FFAudioPlayer::setDeviceType(int32_t device_type) {
+    if ( this->device_type != device_type ) {
+        this->device_type = device_type;
+        if ( player ) {
+            player->setDefaultOutputDevice(device_type);
         }
     }
 }

@@ -24,6 +24,7 @@
 #define FFMPEGPROJ_AUDIORENDERER_H
 
 #include <functional>
+#include <ohaudio/native_audio_device_base.h>
 #include <ohaudio/native_audiostream_base.h>
 
 namespace FFAV {
@@ -53,6 +54,8 @@ public:
     // [0.25, 4.0]
     OH_AudioStream_Result setSpeed(float speed);
     OH_AudioStream_Result getSpeed(float* speed_ptr);
+    
+    OH_AudioStream_Result setDefaultOutputDevice(OH_AudioDevice_Type device_type);
 
     using WriteDataCallback = std::function<OH_AudioData_Callback_Result(void* _Nonnull audio_buffer, int audio_buffer_size_in_bytes)>;
     void setWriteDataCallback(WriteDataCallback callback);

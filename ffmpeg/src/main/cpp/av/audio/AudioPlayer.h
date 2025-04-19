@@ -53,12 +53,15 @@ class AudioPlayer {
     // [0.25, 4.0]
     void setSpeed(float speed);
     
+    void setDefaultOutputDevice(int32_t device_type);
+    
     void setEventCallback(EventMessageQueue::EventCallback callback);
     
 private:
     const std::string url;
     int64_t start_time_position_ms;
     const std::map<std::string, std::string> http_options;
+    OH_AudioStream_Usage stream_usage;
     
     AudioReader* audio_reader { nullptr };
     AudioDecoder* audio_decoder { nullptr };
@@ -74,6 +77,7 @@ private:
     
     float volume { 1 };
     float speed { 1 };
+    int32_t device_type { -1 }; // -1 表示没设置
 
     int pkt_size_threshold { 5 * 1024 * 1024 }; // bytes; 5M;
     int render_frame_size;

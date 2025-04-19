@@ -24,6 +24,7 @@
 #define FFMPEG_HARMONY_OS_AUDIOPLAYBACKOPTIONS_H
 
 #include <map>
+#include <ohaudio/native_audiostream_base.h>
 #include <stdint.h>
 
 namespace FFAV {
@@ -31,10 +32,12 @@ namespace FFAV {
 struct AudioPlaybackOptions {
     int64_t start_time_position_ms;
     std::map<std::string, std::string> http_options;
+    OH_AudioStream_Usage stream_usage;
     
-    void clear() {
+    void reset() {
         start_time_position_ms = 0;
         http_options.clear();
+        stream_usage = AUDIOSTREAM_USAGE_MUSIC;
     }
 };
 

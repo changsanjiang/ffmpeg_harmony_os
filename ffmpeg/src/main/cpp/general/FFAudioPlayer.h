@@ -50,6 +50,7 @@ private:
     static napi_value SetVolume(napi_env env, napi_callback_info info);
     static napi_value GetSpeed(napi_env env, napi_callback_info info);
     static napi_value SetSpeed(napi_env env, napi_callback_info info);
+    static napi_value SetDefaultOutputDevice(napi_env env, napi_callback_info info);
     static napi_value GetPlayWhenReady(napi_env env, napi_callback_info info);
     static napi_value GetCurrentTime(napi_env env, napi_callback_info info);
     static napi_value GetDuration(napi_env env, napi_callback_info info);
@@ -74,6 +75,7 @@ private:
     
     float volume = 1;
     float speed = 1;
+    int32_t device_type { -1 }; // -1 表示没设置
     
     napi_threadsafe_function js_func_play_when_ready_callback = nullptr;
     napi_threadsafe_function js_func_duration_change_callback = nullptr;
@@ -91,6 +93,7 @@ private:
     
     void setVolume(float volume);
     void setSpeed(float speed);
+    void setDeviceType(int32_t device_type);
 
     void onPlayerEvent(std::shared_ptr<FFAV::EventMessage> msg);
     void onPlayWhenReadyChange(bool play_when_ready, PlayWhenReadyChangeReason reason);

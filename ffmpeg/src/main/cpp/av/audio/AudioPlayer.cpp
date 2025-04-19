@@ -30,7 +30,7 @@ namespace FFAV {
 static const AVSampleFormat OUTPUT_SAMPLE_FORMAT = AV_SAMPLE_FMT_S16;
 static const OH_AudioStream_SampleFormat OUTPUT_RENDER_SAMPLE_FORMAT = AUDIOSTREAM_SAMPLE_S16LE;
 
-AudioPlayer::AudioPlayer(const std::string& url, const AudioPlaybackOptions& options): url(url), start_time_position_ms(options.start_time_position_ms), http_options(options.http_options) {
+AudioPlayer::AudioPlayer(const std::string& url, const AudioPlaybackOptions& options): url(url), start_time_position_ms(options.start_time_position_ms), http_options(options.http_options), stream_usage(options.stream_usage) {
     
 }
 
@@ -162,6 +162,14 @@ void AudioPlayer::setSpeed(float speed) {
     }
 }
 
+void AudioPlayer::setDefaultOutputDevice(int32_t device_type) {
+    std::lock_guard<std::mutex> lock(mtx);
+    this->device_type = device_type;
+    if ( audio_renderer ) {
+        audio_renderer->setDefaultOutputDevice((OH_AudioDevice_Type)device_type);
+    }
+}
+
 void AudioPlayer::setEventCallback(EventMessageQueue::EventCallback callback) {
     event_msg_queue->setEventCallback(callback);
 }
@@ -241,7 +249,7 @@ void AudioPlayer::onReaderReadyToReadCallback(AudioReader* reader, AVStream* str
     
     // init audio renderer
     audio_renderer = new AudioRenderer();
-    OH_AudioStream_Result render_ret = audio_renderer->init(output_render_sample_format, output_sample_rate, output_nb_channels);
+    OH_AudioStream_Result render_ret = audio_renderer->init(output_render_sample_format, output_sample_rate, output_nb_channels, stream_usage);
     if ( render_ret != AUDIOSTREAM_SUCCESS ) {
         onRenderError(render_ret);
         return;
@@ -249,6 +257,7 @@ void AudioPlayer::onReaderReadyToReadCallback(AudioReader* reader, AVStream* str
     
     if ( volume != 1 ) audio_renderer->setVolume(volume);
     if ( speed != 1 ) audio_renderer->setSpeed(speed);
+    if ( device_type != -1 ) audio_renderer->setDefaultOutputDevice((OH_AudioDevice_Type)device_type);
     
     // set callbacks
     audio_renderer->setWriteDataCallback(std::bind(&AudioPlayer::onRendererWriteDataCallback, this, std::placeholders::_1, std::placeholders::_2));

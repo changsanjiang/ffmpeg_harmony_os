@@ -229,6 +229,13 @@ OH_AudioStream_Result AudioRenderer::getSpeed(float* speed_ptr) {
     return OH_AudioRenderer_GetSpeed(audio_renderer, speed_ptr);
 }
 
+OH_AudioStream_Result AudioRenderer::setDefaultOutputDevice(OH_AudioDevice_Type device_type) {
+    if ( audio_renderer == nullptr ) {
+        throw std::runtime_error("AudioRenderer is not initialized");
+    }
+    return OH_AudioRenderer_SetDefaultOutputDevice(audio_renderer, device_type);
+}
+
 void AudioRenderer::setWriteDataCallback(AudioRenderer::WriteDataCallback callback) {
     write_data_cb = callback;
 }

@@ -84,7 +84,8 @@ export enum FFPlayWhenReadyChangeReason {
 }
 
 export interface FFAudioPlaybackOptions {
-  readonly startTimePosition?: number;  // 毫秒, 非负数, 表示从音频的某个时间点开始播放
+  /** 毫秒, 非负数, 表示从音频的某个时间点开始播放; */
+  readonly startTimePosition?: number;  
 
   /** 设置 http 请求;
    *
@@ -99,6 +100,10 @@ export interface FFAudioPlaybackOptions {
    *\endcode
    */
   readonly httpOptions?: Record<string, string>;
+
+
+  /** 默认是 audio.StreamUsage.STREAM_USAGE_MUSIC; */
+  readonly streamUsage?: audio.StreamUsage;
 }
 
 /**
@@ -142,6 +147,9 @@ export class FFAudioPlayer {
   public stop();
 
   public seek(time_ms: number);
+  
+  /** https://developer.huawei.com/consumer/cn/doc/harmonyos-references/js-apis-audio#setdefaultoutputdevice12 */
+  public setDefaultOutputDevice(deviceType: audio.DeviceType);
 
   public on(event: 'playWhenReadyChange', callback: (playWhenReady: boolean, reason: FFPlayWhenReadyChangeReason) => void);
 
