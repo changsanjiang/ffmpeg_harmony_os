@@ -610,7 +610,7 @@ bool FFAudioPlayer::createPlayer() {
         player = new FFAV::AudioPlayer(url, options);
         if ( speed != 1 ) player->setSpeed(speed);
         if ( volume != 1 ) player->setVolume(volume);
-        if ( device_type != -1 ) player->setDefaultOutputDevice(device_type);
+        if ( device_type != OH_AudioDevice_Type::AUDIO_DEVICE_TYPE_DEFAULT ) player->setDefaultOutputDevice(device_type);
         player->setEventCallback(std::bind(&FFAudioPlayer::onPlayerEvent, this, std::placeholders::_1));
     }
     return player != nullptr;
@@ -695,9 +695,9 @@ void FFAudioPlayer::setSpeed(float speed) {
 
 void FFAudioPlayer::setDeviceType(int32_t device_type) {
     if ( this->device_type != device_type ) {
-        this->device_type = device_type;
+        this->device_type = (OH_AudioDevice_Type)device_type;
         if ( player ) {
-            player->setDefaultOutputDevice(device_type);
+            player->setDefaultOutputDevice(this->device_type);
         }
     }
 }

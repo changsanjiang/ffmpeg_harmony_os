@@ -53,7 +53,7 @@ class AudioPlayer {
     // [0.25, 4.0]
     void setSpeed(float speed);
     
-    void setDefaultOutputDevice(int32_t device_type);
+    void setDefaultOutputDevice(OH_AudioDevice_Type device_type);
     
     void setEventCallback(EventMessageQueue::EventCallback callback);
     
@@ -77,7 +77,7 @@ private:
     
     float volume { 1 };
     float speed { 1 };
-    int32_t device_type { -1 }; // -1 表示没设置
+    OH_AudioDevice_Type device_type { OH_AudioDevice_Type::AUDIO_DEVICE_TYPE_DEFAULT };
 
     int pkt_size_threshold { 5 * 1024 * 1024 }; // bytes; 5M;
     int render_frame_size;

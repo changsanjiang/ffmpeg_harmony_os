@@ -75,7 +75,7 @@ private:
     
     float volume = 1;
     float speed = 1;
-    int32_t device_type { -1 }; // -1 表示没设置
+    OH_AudioDevice_Type device_type { OH_AudioDevice_Type::AUDIO_DEVICE_TYPE_DEFAULT };
     
     napi_threadsafe_function js_func_play_when_ready_callback = nullptr;
     napi_threadsafe_function js_func_duration_change_callback = nullptr;

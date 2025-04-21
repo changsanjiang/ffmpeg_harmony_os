@@ -162,11 +162,11 @@ void AudioPlayer::setSpeed(float speed) {
     }
 }
 
-void AudioPlayer::setDefaultOutputDevice(int32_t device_type) {
+void AudioPlayer::setDefaultOutputDevice(OH_AudioDevice_Type device_type) {
     std::lock_guard<std::mutex> lock(mtx);
     this->device_type = device_type;
     if ( audio_renderer ) {
-        audio_renderer->setDefaultOutputDevice((OH_AudioDevice_Type)device_type);
+        audio_renderer->setDefaultOutputDevice(device_type);
     }
 }
 
@@ -257,7 +257,7 @@ void AudioPlayer::onReaderReadyToReadCallback(AudioReader* reader, AVStream* str
     
     if ( volume != 1 ) audio_renderer->setVolume(volume);
     if ( speed != 1 ) audio_renderer->setSpeed(speed);
-    if ( device_type != -1 ) audio_renderer->setDefaultOutputDevice((OH_AudioDevice_Type)device_type);
+    if ( device_type != OH_AudioDevice_Type::AUDIO_DEVICE_TYPE_DEFAULT ) audio_renderer->setDefaultOutputDevice(device_type);
     
     // set callbacks
     audio_renderer->setWriteDataCallback(std::bind(&AudioPlayer::onRendererWriteDataCallback, this, std::placeholders::_1, std::placeholders::_2));
