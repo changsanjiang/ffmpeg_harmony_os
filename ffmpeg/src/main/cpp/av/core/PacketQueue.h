@@ -45,6 +45,8 @@ public:
     int64_t getLastPushPts();
     int64_t getLastPopPts();
 
+    int64_t getFrontPacketPts();
+    
     // 获取所有数据包的数量
     size_t getCount();
 

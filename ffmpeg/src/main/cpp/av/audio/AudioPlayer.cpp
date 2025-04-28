@@ -22,16 +22,13 @@
 
 #include "AudioPlayer.h"
 #include "extension/client_print.h"
-#include <cerrno>
 #include <stdint.h>
 
 namespace FFAV {
 
-static const AVSampleFormat OUTPUT_SAMPLE_FORMAT = AV_SAMPLE_FMT_S16;
-static const OH_AudioStream_SampleFormat OUTPUT_RENDER_SAMPLE_FORMAT = AUDIOSTREAM_SAMPLE_S16LE;
-
-AudioPlayer::AudioPlayer(const std::string& url, const AudioPlaybackOptions& options): url(url), start_time_position_ms(options.start_time_position_ms), http_options(options.http_options), stream_usage(options.stream_usage) {
-    
+AudioPlayer::AudioPlayer(const std::string& url, const AudioPlaybackOptions& options): stream_usage(options.stream_usage) {
+    audio_item = new AudioItem(url, options.start_time_position_ms, options.http_options);
+    audio_renderer = new AudioRenderer();
 }
 
 AudioPlayer::~AudioPlayer() {
@@ -40,45 +37,19 @@ AudioPlayer::~AudioPlayer() {
 #endif
     {
         std::lock_guard<std::mutex> lock(mtx);
-        flags.release_invoked = true;
+        flags.released = true;
     }
     
     event_msg_queue->stop();
     delete event_msg_queue;
-    
-    if ( flags.is_registered_network_status_change_callback ) {
-        NetworkReachability::shared().removeNetworkStatusChangeCallback(network_status_change_callback_id);
-    }
-    
-    if ( recreate_reader_scheduler) {
-        // 尝试取消; 可能此时还在延迟等待中, 直接取消即可;
-        recreate_reader_scheduler->tryCancel();
-    }
     
     if ( audio_renderer ) {
         audio_renderer->stop();
         delete audio_renderer;
     }
 
-    if ( audio_reader ) {
-        audio_reader->stop();
-        delete audio_reader;
-    }
-    
-    if ( audio_decoder ) {
-        delete audio_decoder;
-    }
-    
-    if ( pkt_queue ) {
-        delete pkt_queue;
-    }
-    
-    if ( audio_fifo ) {
-        delete audio_fifo;
-    }
-    
-    if ( pkt ) {
-        av_packet_free(&pkt);
+    if ( audio_item ) {
+        delete audio_item;
     }
     
 #ifdef DEBUG
@@ -96,12 +67,6 @@ void AudioPlayer::play() {
     onPlay(PlayWhenReadyChangeReason::USER_REQUEST);
 }
 
-void AudioPlayer::playImmediately() {
-    std::lock_guard<std::mutex> lock(mtx);
-    flags.should_play_immediate = true;
-    onPlay(PlayWhenReadyChangeReason::USER_REQUEST);
-}
-
 void AudioPlayer::pause() {
     std::lock_guard<std::mutex> lock(mtx);
     onPause(PlayWhenReadyChangeReason::USER_REQUEST);
@@ -109,32 +74,17 @@ void AudioPlayer::pause() {
 
 void AudioPlayer::seek(int64_t time_pos_ms) {
     std::unique_lock<std::mutex> lock(mtx);
-    if ( !flags.init_successful || flags.has_error || flags.release_invoked ) {
+    if ( !flags.prepared || flags.has_error || flags.released ) {
         return;
     }
     
-    if ( flags.should_recreate_reader ) {
-        flags.seeked_before_recreate_reader = true;
-        start_time_position_ms = time_pos_ms;
-        if ( recreate_reader_scheduler ) {
-            recreate_reader_scheduler->tryCancel();
-            recreate_reader_scheduler = nullptr;
-        }
-        flush();
-        lock.unlock();
-        recreateReaderIfNeeded();
-        return;
-    }
-    
-    if ( flags.should_align_pts ) {
-        flags.should_align_pts = false;
-    }
-    audio_reader->seek(time_pos_ms);
+    flags.is_playback_ended = false;
+    audio_item->seek(time_pos_ms);
 }
 
 void AudioPlayer::setVolume(float volume) {
     std::lock_guard<std::mutex> lock(mtx);
-    if ( flags.has_error || flags.release_invoked ) {
+    if ( flags.has_error || flags.released ) {
         return;
     }
     
@@ -142,14 +92,15 @@ void AudioPlayer::setVolume(float volume) {
     else if ( volume > 1.0f ) volume = 1.0f;
     
     this->volume = volume;
-    if ( audio_renderer ) {
+    
+    if ( flags.prepared ) {
         audio_renderer->setVolume(volume);
     }
 }
 
 void AudioPlayer::setSpeed(float speed) {
     std::lock_guard<std::mutex> lock(mtx);
-    if ( flags.has_error || flags.release_invoked ) {
+    if ( flags.has_error || flags.released ) {
         return;
     }
     
@@ -157,7 +108,8 @@ void AudioPlayer::setSpeed(float speed) {
     else if ( speed > 4.0f ) speed = 4.0f;
     
     this->speed = speed;
-    if ( audio_renderer ) {
+    
+    if ( flags.prepared ) {
         audio_renderer->setSpeed(speed);
     }
 }
@@ -165,7 +117,8 @@ void AudioPlayer::setSpeed(float speed) {
 void AudioPlayer::setDefaultOutputDevice(OH_AudioDevice_Type device_type) {
     std::lock_guard<std::mutex> lock(mtx);
     this->device_type = device_type;
-    if ( audio_renderer ) {
+    
+    if ( flags.prepared ) {
         audio_renderer->setDefaultOutputDevice(device_type);
     }
 }
@@ -175,81 +128,26 @@ void AudioPlayer::setEventCallback(EventMessageQueue::EventCallback callback) {
 }
 
 void AudioPlayer::onPrepare() {
-    if ( flags.prepare_invoked || flags.has_error || flags.release_invoked ) {
+    if ( flags.prepared || flags.has_error || flags.released ) {
         return;
     }
     
-    flags.prepare_invoked = true;
-    onRecreateReader(start_time_position_ms);
-}
-
-void AudioPlayer::onRecreateReader(int64_t start_time_position_ms) {
-#ifdef DEBUG
-    client_print_message3("AAAAA: AudioPlayer::recreateReader(%lld)", start_time_position_ms);
-#endif
-    if ( audio_reader ) {
-        delete audio_reader;
-    }
+    // init audio item
+    audio_item->setOnDurationChangeCallback([&](int64_t durationMs) {
+        onEvent(std::make_shared<DurationChangeEventMessage>(durationMs));
+    });
+    audio_item->setOnPlayableDurationChangeCallback([&](int64_t playableDurationMs) {
+        onEvent(std::make_shared<PlayableDurationChangeEventMessage>(playableDurationMs));
+    });
+    audio_item->setOnErrorCallback([&](int ff_err) {
+        onFFmpegError(ff_err);
+    });
     
-    flags.should_recreate_reader = false;
-
-    audio_reader = new AudioReader(url, start_time_position_ms, http_options);
-    audio_reader->setReadyToReadPacketCallback(std::bind(&AudioPlayer::onReaderReadyToReadCallback, this, std::placeholders::_1, std::placeholders::_2));
-    audio_reader->setReadPacketCallback(std::bind(&AudioPlayer::onReaderReadPacketCallback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-    audio_reader->setErrorCallback(std::bind(&AudioPlayer::onReaderErrorCallback, this, std::placeholders::_1, std::placeholders::_2));
-    audio_reader->prepare();
-    recreate_reader_scheduler = nullptr;
-}
-
-void AudioPlayer::onReaderReadyToReadCallback(AudioReader* reader, AVStream* stream) {
-    std::unique_lock<std::mutex> lock(mtx);
-    if ( flags.has_error || flags.release_invoked ) {
-        return;
-    } 
-    
-    // reset flags
-    recreate_reader_delay = 0;
-    flags.seeked_before_recreate_reader = false;
-    
-    // 网络断开重连时新的 reader 回调会重新进这里, 以下初始化代码无需再次执行, 直接return即可;
-    if ( flags.init_successful ) {
-        reader->start();
-        return;
-    }
-    
-    // init vars
-    audio_stream_time_base = stream->time_base;
-    output_sample_format = OUTPUT_SAMPLE_FORMAT;
-    output_render_sample_format = OUTPUT_RENDER_SAMPLE_FORMAT;
-    output_nb_bytes_per_sample = av_get_bytes_per_sample(output_sample_format);
-    
-    // init audio decoder
-    audio_decoder = new AudioDecoder();
-    int ff_ret = audio_decoder->init(stream->codecpar, audio_stream_time_base, output_sample_format);
-    if ( ff_ret < 0 ) {
-        onFFmpegError(ff_ret);
-        return;
-    }
-    
-    output_sample_rate = audio_decoder->getOutputSampleRate();
-    output_time_base = (AVRational){ 1, output_sample_rate };
-    output_nb_channels = audio_decoder->getOutputChannels();
-    
-    // init audio fifo
-    audio_fifo = new AudioFifo();
-    ff_ret = audio_fifo->init(output_sample_format, output_nb_channels, 1);
-    if ( ff_ret < 0 ) {
-        onFFmpegError(ff_ret);
-        return;
-    }
-    
-    // init pkt queue
-    pkt_queue = new PacketQueue();
-    pkt = av_packet_alloc();
+    output_nb_channels = audio_item->getOutputChannels();
+    output_nb_bytes_per_sample = av_get_bytes_per_sample(audio_item->getOutputSampleFormat());
     
     // init audio renderer
-    audio_renderer = new AudioRenderer();
-    OH_AudioStream_Result render_ret = audio_renderer->init(output_render_sample_format, output_sample_rate, output_nb_channels, stream_usage);
+    OH_AudioStream_Result render_ret = audio_renderer->init(audio_item->getOutputOHSampleFormat(), audio_item->getOutputSampleRate(), audio_item->getOutputChannels(), stream_usage);
     if ( render_ret != AUDIOSTREAM_SUCCESS ) {
         onRenderError(render_ret);
         return;
@@ -264,233 +162,40 @@ void AudioPlayer::onReaderReadyToReadCallback(AudioReader* reader, AVStream* str
     audio_renderer->setInterruptEventCallback(std::bind(&AudioPlayer::onRendererInterruptEventCallback, this, std::placeholders::_1, std::placeholders::_2));
     audio_renderer->setErrorCallback(std::bind(&AudioPlayer::onRendererErrorCallback, this, std::placeholders::_1));
     audio_renderer->setOutputDeviceChangeCallback(std::bind(&AudioPlayer::onOutputDeviceChangeCallback, this, std::placeholders::_1));
-    
-    render_frame_size = audio_renderer->getFrameSize();
-    duration_ms = av_rescale_q(stream->duration, audio_stream_time_base, (AVRational){ 1, 1000 });
-        
-    // start read pkt
-    reader->start();
-    
-    // init successful
-    flags.init_successful = true;
-    if ( flags.play_when_ready ) {
-        startRenderer();
-    }
-    
-    // notify events
-    onEvent(std::make_shared<DurationChangeEventMessage>(duration_ms));
-}
 
-void AudioPlayer::onReaderReadPacketCallback(AudioReader* reader, AVPacket* pkt, bool should_flush) {
-    std::unique_lock<std::mutex> lock(mtx);
-    if ( flags.has_error || flags.release_invoked ) {
-        return;
-    }
+    // prepare
+    audio_item->prepare();
     
-    if ( should_flush || flags.should_flush_pkt ) {
-        flush();
-    }
-    
-    if ( !pkt ) {
-        flags.is_read_eof = true;
-        playable_duration_ms = duration_ms;
-        onEvent(std::make_shared<PlayableDurationChangeEventMessage>(playable_duration_ms));
-        return;
-    }
-    
-    pkt_queue->push(pkt);
-    reader->setPacketBufferFull(pkt_queue->getSize() >= pkt_size_threshold);
-    
-    if ( pkt->pts != AV_NOPTS_VALUE ) {
-        int64_t pts_ms = av_rescale_q(pkt->pts, audio_stream_time_base, (AVRational){ 1, 1000 });
-        playable_duration_ms = pts_ms;
-        onEvent(std::make_shared<PlayableDurationChangeEventMessage>(playable_duration_ms));
-        
-         if ( flags.should_reset_current_time ) {
-            flags.should_reset_current_time = false;
-            current_time_ms = pts_ms;
-            onEvent(std::make_shared<CurrentTimeEventMessage>(current_time_ms));
-        }
-    }
-}
-
-void AudioPlayer::onReaderErrorCallback(AudioReader* reader, int ff_err) {
-    client_print_message3("AAAAA: onReaderErrorCallback(%d), %s", ff_err, av_err2str(ff_err));
-    std::unique_lock<std::mutex> lock(mtx);
-   
-    if ( ff_err == AVERROR(EIO) ||
-         ff_err == AVERROR(ENETDOWN) || 
-         ff_err == AVERROR(ENETUNREACH) ||
-         ff_err == AVERROR(ENETRESET) ||
-         ff_err == AVERROR(ECONNABORTED) ||
-         ff_err == AVERROR(ECONNRESET) || 
-         ff_err == AVERROR(ETIMEDOUT) || 
-         ff_err == AVERROR(EHOSTUNREACH) ||
-         ff_err == AVERROR_INVALIDDATA
-        ) {
-        flags.should_recreate_reader = true;
-        
-        NetworkStatus network_status = NetworkReachability::shared().getStatus();
-#ifdef DEBUG
-        client_print_message3("AAAA: network status: %d", network_status);
-#endif
-        // 无网络的时候监听网络状态变更;
-        // 可用时重新初始化 reader;
-        if ( !flags.is_registered_network_status_change_callback ) {
-            if ( network_status != NetworkStatus::AVAILABLE ) {
-                flags.is_registered_network_status_change_callback = true;
-                network_status_change_callback_id = NetworkReachability::shared().addNetworkStatusChangeCallback(std::bind(&AudioPlayer::onNetworkStatusChange, this, std::placeholders::_1));
-                return;
-            }
-        }
-        
-        // 有网络时延迟n秒后重试;
-        if ( network_status == NetworkStatus::AVAILABLE ) {
-            recreate_reader_scheduler = TaskScheduler::scheduleTask([&] {
-                recreateReaderIfNeeded();
-            }, recreate_reader_delay += 2);
-        }
-        return;
-    }
-    
-    onFFmpegError(ff_err);
-}
-
-void AudioPlayer::onDec() { 
-    do {
-        if ( audio_fifo->getNumberOfSamples() > render_frame_size || flags.is_dec_eof || flags.has_error || flags.release_invoked ) {
-            return;
-        }
-        
-        // 无可解码数据
-        if ( !flags.is_read_eof && pkt_queue->getCount() == 0 ) {
-            return;
-        }
-        
-        // 有可解码数据或读取结束
-        AVPacket* next_pkt = nullptr;
-        if ( pkt_queue->pop(pkt) ) {
-            next_pkt = pkt;
-        }
-        
-        int ret = audio_decoder->decode(next_pkt, [&](AVFrame* filt_frame) {
-            if ( !flags.should_flush_pkt && flags.should_align_pts ) {
-                int64_t aligned_pts = audio_fifo->getEndPts(); 
-                int64_t start_pts = filt_frame->pts;
-                if ( aligned_pts != AV_NOPTS_VALUE && aligned_pts != start_pts ) {
-                    if ( start_pts > aligned_pts ) {
-                        return AVERROR_BUG2;
-                    }
-                    
-                    int64_t end_pts = start_pts + filt_frame->nb_samples;
-                    if ( aligned_pts > end_pts ) {
-                        return 0;
-                    }
-                    
-                    // intersecting samples
-                    int64_t nb_samples = end_pts - aligned_pts;
-                    int pos_offset = (aligned_pts - start_pts) * output_nb_bytes_per_sample * output_nb_channels;
-                    uint8_t* data = filt_frame->data[0];
-                    data += pos_offset;
-                    audio_fifo->write((void **)&data, nb_samples, aligned_pts);
-                    flags.should_align_pts = false;
-                    return 0;
-                }
-                else {
-                    flags.should_align_pts = false;
-                }
-            }
-            audio_fifo->write((void **)filt_frame->data, filt_frame->nb_samples, filt_frame->pts);
-            return 0;
-        });
-        
-        if ( next_pkt ) {
-            av_packet_unref(next_pkt);
-            audio_reader->setPacketBufferFull(pkt_queue->getSize() >= pkt_size_threshold);
-        }
-        
-        if ( ret == AVERROR_EOF ) {
-            flags.is_dec_eof = true;
-            if ( flags.should_align_pts ) flags.should_align_pts = false;
-            return;
-        }
-        else if ( ret == AVERROR(EAGAIN) ) {
-            // nothing
-        }
-        else if ( ret < 0 ) {
-            onFFmpegError(ret);
-            return;
-        }
-    } while (true);
+    flags.prepared = true;
 }
 
 OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* write_buffer, int write_buffer_size_in_bytes) {
     std::unique_lock<std::mutex> lock(mtx);
-    if ( flags.release_invoked || flags.has_error ) {
-        return AUDIO_DATA_CALLBACK_RESULT_INVALID;
+    
+    int capacity = write_buffer_size_in_bytes / output_nb_bytes_per_sample / output_nb_channels;
+    int64_t pts = 0;
+    bool eof = false;
+    int ret = audio_item->tryTranscode(capacity, &write_buffer, &pts, &eof);
+    
+    int samples_read = ret > 0 ? ret : 0;
+    if ( samples_read < capacity ) {
+        int bytes_read = samples_read * output_nb_channels * output_nb_bytes_per_sample;
+        memset(static_cast<uint8_t*>(write_buffer) + bytes_read, 0, write_buffer_size_in_bytes - bytes_read);
     }
     
     // playback ended
-    if ( flags.is_render_eof && !flags.is_playback_ended ) {
+    if ( samples_read == 0 && eof ) {
         flags.is_playback_ended = true;
-        current_time_ms = duration_ms;
-        onEvent(std::make_shared<CurrentTimeEventMessage>(current_time_ms));
+        onEvent(std::make_shared<CurrentTimeEventMessage>(audio_item->getDurationMs()));
         onPause(PlayWhenReadyChangeReason::PLAYBACK_ENDED);
-#ifdef DEBUG
-    client_print_message("AAAA: playback ended");
-#endif
-        return AUDIO_DATA_CALLBACK_RESULT_INVALID;
     }
-    
-    onDec();
-    
-    int nb_write_buffer_samples = write_buffer_size_in_bytes / output_nb_channels / output_nb_bytes_per_sample;
-    int nb_fifo_samples = audio_fifo->getNumberOfSamples();
-    
-    // 缓冲不足
-    bool is_fifo_underflow = nb_fifo_samples < nb_write_buffer_samples && !flags.is_dec_eof;
-    // 是否应该播放到缓冲耗尽
-    bool should_drain_fifo = flags.should_drain_fifo;
-    // 是否需要尽快播放
-    // 当调用 playImmediately 或解码 eof 时直接播放
-    bool play_immediate = (flags.should_play_immediate && nb_fifo_samples >= render_frame_size) || flags.is_read_eof;
-    // 是否能够尽可能的流畅播放
-    bool keep_up_likely = (playable_duration_ms - current_time_ms) > 3000;
-    
-    // reset flags
-    if ( is_fifo_underflow && flags.should_drain_fifo ) {
-        flags.should_drain_fifo = false;
+    // error
+    else if ( ret < 0 ) {
+        onFFmpegError(ret);
     }
-    if ( flags.should_play_immediate ) {
-        flags.should_play_immediate = false;
+    else if ( samples_read > 0 ) {
+        onEvent(std::make_shared<CurrentTimeEventMessage>(pts));
     }
-    
-    // 是否需要读取fifo写入播放
-    // 
-    bool should_read_fifo = !is_fifo_underflow && (should_drain_fifo || play_immediate || keep_up_likely);
-    if ( should_read_fifo ) {
-        if ( !should_drain_fifo ) {
-            flags.should_drain_fifo = true;
-        }    
-        
-        int64_t pts;
-        int nb_read_samples = audio_fifo->read(&write_buffer, nb_write_buffer_samples, &pts);
-        int64_t pts_ms = av_rescale_q(pts, output_time_base, (AVRational){ 1, 1000 });
-        current_time_ms = pts_ms;
-        onEvent(std::make_shared<CurrentTimeEventMessage>(pts_ms));
-        
-        if ( flags.is_dec_eof ) {
-            int read_bytes = nb_read_samples * output_nb_channels * output_nb_bytes_per_sample;
-            if ( read_bytes < write_buffer_size_in_bytes ) {
-                memset(static_cast<uint8_t*>(write_buffer) + read_bytes, 0, write_buffer_size_in_bytes - read_bytes);
-                flags.is_render_eof = true;
-            }
-        }
-        return AUDIO_DATA_CALLBACK_RESULT_VALID;
-    }
-    
-    // set mute
-    memset(static_cast<uint8_t*>(write_buffer), 0, write_buffer_size_in_bytes);
     return AUDIO_DATA_CALLBACK_RESULT_VALID;
 }
 
@@ -583,32 +288,6 @@ void AudioPlayer::onOutputDeviceChangeCallback(OH_AudioStream_DeviceChangeReason
     }
 }
 
-void AudioPlayer::flush() {
-    if ( flags.should_flush_pkt ) {
-        // clear buffers
-        pkt_queue->clear();
-        audio_decoder->flush();
-        
-        // reset flags
-        flags.should_flush_pkt = false;
-    }
-    else {
-        // clear buffers
-        pkt_queue->clear();
-        audio_decoder->flush();
-        audio_fifo->clear();
-        if ( !flags.is_renderer_running ) audio_renderer->flush();
-        
-        // reset flags
-        flags.is_read_eof = false;
-        flags.is_dec_eof = false;
-        flags.is_render_eof = false;
-        flags.is_playback_ended = false;
-        flags.should_reset_current_time = true;
-        flags.should_drain_fifo = false;
-    }
-}
-
 void AudioPlayer::onFFmpegError(int error) {
     client_print_message3("AAAAA: onFFmpegError(%d), %s", error, av_err2str(error));
     
@@ -622,12 +301,11 @@ void AudioPlayer::onRenderError(OH_AudioStream_Result error) {
 }
 
 void AudioPlayer::onError(std::shared_ptr<Error> error) {
-    if ( flags.has_error || flags.release_invoked ) {
+    if ( flags.has_error || flags.released ) {
         return;
     }
     
     flags.has_error = true;
-    cur_error = error;
     
     if ( flags.is_renderer_running ) {
         audio_renderer->stop();
@@ -637,7 +315,7 @@ void AudioPlayer::onError(std::shared_ptr<Error> error) {
 }
 
 void AudioPlayer::onPlay(PlayWhenReadyChangeReason reason) {
-    if ( flags.has_error || flags.release_invoked ) {
+    if ( flags.has_error || flags.released ) {
         return;
     }
 
@@ -646,11 +324,11 @@ void AudioPlayer::onPlay(PlayWhenReadyChangeReason reason) {
     if ( !flags.play_when_ready ) {
         flags.play_when_ready = true;
         
-        if ( !flags.prepare_invoked ) {
+        if ( !flags.prepared ) {
             onPrepare();
         }
         
-        if ( flags.init_successful ) {
+        if ( flags.prepared ) {
             startRenderer();
         }
     }
@@ -660,7 +338,7 @@ void AudioPlayer::onPlay(PlayWhenReadyChangeReason reason) {
 
 void AudioPlayer::onPause(PlayWhenReadyChangeReason reason, bool should_invoke_pause) {
     
-    if ( flags.has_error || flags.release_invoked ) {
+    if ( flags.has_error || flags.released ) {
         return;
     }
     
@@ -698,51 +376,5 @@ void AudioPlayer::startRenderer() {
     }
     flags.is_renderer_running = true;
 }
-
-void AudioPlayer::onNetworkStatusChange(NetworkStatus status) {
-    if ( status == NetworkStatus::AVAILABLE ) {
-        recreateReaderIfNeeded();
-    }
-}
-
-void AudioPlayer::recreateReaderIfNeeded() {
-#ifdef DEBUG
-    client_print_message3("AAAA: recreateReaderIfNeeded");
-#endif
-    
-    std::unique_lock<std::mutex> lock(mtx);
-    if ( !flags.should_recreate_reader || flags.has_error || flags.release_invoked ) {
-        return;
-    }
-    
-    if ( recreate_reader_scheduler ) {
-        recreate_reader_scheduler->tryCancel();
-    }
-    
-    // 如果之前未完成初始化, 则直接重新创建 reader 即可;
-    // 如果已完成初始化, 则需要考虑读取的开始位置;
-    // - 等待期间用户可能调用seek, 需要从seek的位置开始播放(模糊位置)
-    // - 如果未执行seek操作, 则需要从当前位置开始播放(精确位置), 需要在解码时对齐数据
-    if ( !flags.init_successful || flags.seeked_before_recreate_reader ) {
-        onRecreateReader(start_time_position_ms);
-        return;
-    }
-    
-    // 如果等待期间用户执行了 seek 操作, 则 recreate_reader_task 会被取消;
-    // 这里仅需考虑从当前位置恢复读取即可;
-    // 从当前fifo的位置进行恢复, 新的解码数据需要对齐fifo后才能添加到fifo中;
-
-    // set flags 
-    flags.should_align_pts = true; // 解码数据需要对齐到当前 fifo 的尾部;
-    flags.should_flush_pkt = true; // reader 重新创建完毕后, 需要 flush 掉 pkt 的缓存;
-    
-    int64_t start_pts = audio_fifo->getEndPts();
-    if ( start_pts == AV_NOPTS_VALUE ) { 
-        start_pts = 0; 
-    }
-    int64_t pts_ms = av_rescale_q(start_pts, output_time_base, (AVRational){ 1, 1000 });
-    onRecreateReader(pts_ms);
-}
-
 
 }

@@ -24,7 +24,7 @@
 #define FFMPEGPROJ_FILTERGRAPH_H
 
 #include <string>
-#include <unordered_map>
+#include <functional>
 
 extern "C" {
 #include "libavfilter/avfilter.h"
@@ -48,10 +48,19 @@ public:
     int addVideoBufferSourceFilter(const std::string& name, const AVRational time_base, int width, int height, AVPixelFormat pix_fmt, const AVRational sar, const AVRational frame_rate);
     int addBufferSourceFilter(const std::string& name, AVMediaType type, const AVBufferSrcParameters* _Nonnull params);
 
-    int addAudioBufferSinkFilter(const std::string& name, const int* _Nullable sample_rates, const AVSampleFormat* _Nullable sample_fmts, const std::string& channel_layout);
+    int addAudioBufferSinkFilter(const std::string& name, const int* sample_rates, const AVSampleFormat* sample_fmts, const std::string& channel_layout);
+    int addAudioBufferSinkFilter(const std::string& name, int sample_rate, AVSampleFormat sample_fmt, const std::string& channel_layout);
     int addVideoBufferSinkFilter(const std::string& name, const AVPixelFormat* _Nullable pix_fmts);
 
-    int parse(const std::string& filter_descr);
+    using ParseLinker = std::function<int(FFAV::FilterGraph*_Nonnull filter_graph, AVFilterInOut*_Nullable inputs, AVFilterInOut*_Nullable outputs)>;
+    int parse(const std::string& filter_descr, ParseLinker linker = nullptr);
+
+    int createAudioBufferSourceFilter(const std::string& name, const AVRational time_base, int sample_rate, AVSampleFormat sample_fmt, const std::string& ch_layout_desc, AVFilterContext *_Nullable*_Nullable out_filter_ctx);
+    int createVideoBufferSourceFilter(const std::string& name, const AVRational time_base, int width, int height, AVPixelFormat pix_fmt, const AVRational sar, const AVRational frame_rate, AVFilterContext *_Nullable*_Nullable out_filter_ctx);
+    int createBufferSourceFilter(const std::string& name, AVMediaType type, const AVBufferSrcParameters* _Nonnull params, AVFilterContext *_Nullable*_Nullable out_filter_ctx);
+
+    int createAudioBufferSinkFilter(const std::string& name, const int sample_rate, const AVSampleFormat sample_fmt, const std::string& ch_layout_desc, AVFilterContext *_Nullable*_Nullable out_filter_ctx);
+
     int configure();
     
     /**
@@ -114,7 +123,6 @@ private:
     AVFilterInOut* _Nullable inputs = nullptr;
     AVFilterInOut* _Nullable lastOutput = nullptr;
     AVFilterInOut* _Nullable lastInput = nullptr;
-    std::unordered_map<std::string, AVFilterContext*> instances;
     
     const AVFilter* _Nullable abuffer = nullptr;
     const AVFilter* _Nullable vbuffer = nullptr;

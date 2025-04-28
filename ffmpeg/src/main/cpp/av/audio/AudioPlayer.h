@@ -24,15 +24,11 @@
 #define FFMPEG_HARMONY_OS_AUDIOPLAYER_H
 
 #include "av/audio/AudioPlaybackOptions.h"
-#include "av/audio/AudioReader.h"
-#include "av/audio/AudioDecoder.h"
 #include "av/audio/EventMessageQueue.h"
+#include "av/audio/AudioItem.h"
 #include "av/core/AudioRenderer.h"
-#include "av/core/PacketQueue.h"
-#include "av/util/NetworkReachability.h"
 #include "av/util/TaskScheduler.h"
 #include <stdint.h>
-#include <thread>
 #include <memory>
 
 namespace FFAV {
@@ -44,7 +40,6 @@ class AudioPlayer {
 
     void prepare();
     void play();
-    void playImmediately(); // 尽快播放
     void pause();
     void seek(int64_t time_pos_ms);
     
@@ -58,78 +53,34 @@ class AudioPlayer {
     void setEventCallback(EventMessageQueue::EventCallback callback);
     
 private:
-    const std::string url;
-    int64_t start_time_position_ms;
-    const std::map<std::string, std::string> http_options;
-    OH_AudioStream_Usage stream_usage;
-    
-    AudioReader* audio_reader { nullptr };
-    AudioDecoder* audio_decoder { nullptr };
+    AudioItem* audio_item { nullptr };
     AudioRenderer* audio_renderer { nullptr };
-    AudioFifo* audio_fifo { nullptr };
-    PacketQueue* pkt_queue { nullptr };
-    AVPacket* pkt { nullptr };
-    std::mutex mtx;
-    
-    int64_t duration_ms { 0 };
-    int64_t current_time_ms { 0 }; // last_render_pts_ms
-    int64_t playable_duration_ms { 0 }; // last_pkt_pts_or_end_time_ms
     
     float volume { 1 };
     float speed { 1 };
+    
+    OH_AudioStream_Usage stream_usage;
     OH_AudioDevice_Type device_type { OH_AudioDevice_Type::AUDIO_DEVICE_TYPE_DEFAULT };
-
-    int pkt_size_threshold { 5 * 1024 * 1024 }; // bytes; 5M;
-    int render_frame_size;
+    
+    int output_nb_channels;
+    int output_nb_bytes_per_sample;
+    
     PlayWhenReadyChangeReason play_when_ready_change_reason = USER_REQUEST;
-    std::shared_ptr<Error> cur_error { nullptr };
+    
     EventMessageQueue* event_msg_queue = new EventMessageQueue();
     
-    // formats
-    AVRational audio_stream_time_base;
-    AVSampleFormat output_sample_format;
-    OH_AudioStream_SampleFormat output_render_sample_format;
-    int output_nb_bytes_per_sample;
-    int output_sample_rate;
-    AVRational output_time_base;
-    int output_nb_channels;
+    std::mutex mtx;
     
-    std::shared_ptr<TaskScheduler> recreate_reader_scheduler { nullptr };
-    int recreate_reader_delay { 0 };
-    uint32_t network_status_change_callback_id;
     struct {
-        unsigned init_successful :1;
-        unsigned prepare_invoked :1;
-        unsigned release_invoked :1;
+        unsigned released :1;
+        unsigned prepared :1;
         unsigned has_error :1;
         
-        unsigned is_read_eof :1;
-        unsigned is_dec_eof :1;
-        unsigned is_render_eof :1;
-        unsigned should_reset_current_time :1;
-        
         unsigned play_when_ready :1;
-        unsigned should_play_immediate :1;
         unsigned is_renderer_running :1;
-        unsigned should_drain_fifo :1; 
         unsigned is_playback_ended :1;
-        
-        unsigned should_recreate_reader :1;
-        unsigned should_flush_pkt :1;
-        unsigned should_align_pts :1;
-        unsigned seeked_before_recreate_reader :1;
-        
-        unsigned is_registered_network_status_change_callback :1;
     } flags = { 0 };
     
-    
-    void onRecreateReader(int64_t start_time_position_ms);
-    void onReaderReadyToReadCallback(AudioReader* reader, AVStream* stream);
-    void onReaderReadPacketCallback(AudioReader* reader, AVPacket* pkt, bool should_flush);
-    void onReaderErrorCallback(AudioReader* reader, int ff_err);
-    void onDec();
-    
-    void flush();
     void onFFmpegError(int ff_err);
     void onRenderError(OH_AudioStream_Result render_err);
     void onError(std::shared_ptr<Error> error);
@@ -146,9 +97,6 @@ private:
     void onOutputDeviceChangeCallback(OH_AudioStream_DeviceChangeReason reason);
     
     void startRenderer();
-    
-    void onNetworkStatusChange(NetworkStatus status);
-    void recreateReaderIfNeeded();
 };
 
 }

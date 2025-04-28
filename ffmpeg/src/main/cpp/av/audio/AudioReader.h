@@ -32,32 +32,32 @@ namespace FFAV {
 
 class AudioReader {
 public:
-    AudioReader(const std::string& url, int64_t start_time_pos_ms, const std::map<std::string, std::string>& http_options);
+    AudioReader(const std::string& url, const std::map<std::string, std::string>& http_options);
     ~AudioReader();
     
-    void prepare();
+    void prepare(int64_t start_time_pos_ms = AV_NOPTS_VALUE);
     void start();
     void seek(int64_t time_pos_ms);
     void stop();
+    void reset(); // 仅限报错后调用, 调用该方法重置, 可重新调用 prepare 准备; 注意: stop 后调用重置不生效;
     
     // 设置缓冲是否已满;
     // 当缓冲已满时将会暂停读取;
     void setPacketBufferFull(bool is_full);
     
-    using ReadyToReadPacketCallback = std::function<void(AudioReader* reader, AVStream* stream)>;
-    void setReadyToReadPacketCallback(ReadyToReadPacketCallback callback);
+    using ReadyToReadCallback = std::function<void(AudioReader* reader, AVStream* stream)>;
+    void setReadyToReadCallback(ReadyToReadCallback callback);
     
     // seek 之后， read pkt 之前 Queue中的数据都可以使用
     // read pkt 之后(should_flush == true)， queue 中的数据需要清空， 用来存放新位置的 pkt;
     using ReadPacketCallback = std::function<void(AudioReader* reader, AVPacket* pkt, bool should_flush)>;
     void setReadPacketCallback(ReadPacketCallback callback);
     
-    using ErrorCallback = std::function<void(AudioReader* reader, int ff_err)>;
-    void setErrorCallback(ErrorCallback callback);
+    using ReadErrorCallback = std::function<void(AudioReader* reader, int ff_err)>;
+    void setReadErrorCallback(ReadErrorCallback callback);
     
 private:
     const std::string url;
-    int64_t start_time_pos_ms;
     const std::map<std::string, std::string> http_options;
     
     std::mutex mtx;
@@ -70,21 +70,19 @@ private:
     
     std::atomic<bool> is_pkt_buffer_full { false };
 
-    int64_t req_seek_time; // in base q;
-    int64_t seeking_time { AV_NOPTS_VALUE }; // in base q; current seek time; 
+    int64_t req_seek_time { AV_NOPTS_VALUE }; // in base q; 
+    int64_t seeking_time { AV_NOPTS_VALUE }; // in base q; 
     
-    ReadyToReadPacketCallback ready_to_read_pkt_callback { nullptr };
+    ReadyToReadCallback ready_to_read_callback { nullptr };
     ReadPacketCallback read_pkt_callback { nullptr };
-    ErrorCallback error_callback { nullptr };
+    ReadErrorCallback error_callback { nullptr };
 
     struct {
-        unsigned int init_successful :1;
         unsigned int release_invoked :1;
         unsigned int prepare_invoked :1;
         unsigned int has_error :1;
 
         unsigned int is_started :1;
-        unsigned int wants_seek :1;
         unsigned int is_read_eof :1;
     } flags { 0 };
     

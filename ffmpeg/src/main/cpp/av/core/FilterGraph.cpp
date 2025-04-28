@@ -46,11 +46,7 @@ int FilterGraph::addAudioBufferSourceFilter(const std::string& name, const AVRat
     if ( filter_graph == nullptr ) {
         return AVERROR_INVALIDDATA;
     }
-        
-    if ( instances[name] != nullptr ) {
-        return AVERROR(EAGAIN);
-    }
-
+    
     if ( abuffer == nullptr ) {
         abuffer = avfilter_get_by_name("abuffer");
     }
@@ -83,11 +79,6 @@ int FilterGraph::addVideoBufferSourceFilter(const std::string& name, const AVRat
         return AVERROR_INVALIDDATA;
     }        
 
-    if ( instances[name] != nullptr ) {
-        return AVERROR(EAGAIN);
-    }
-
-
     if ( vbuffer == nullptr ) {
         vbuffer = avfilter_get_by_name("buffer");
     }
@@ -115,10 +106,6 @@ int FilterGraph::addVideoBufferSourceFilter(const std::string& name, const AVRat
 }
 
 int FilterGraph::addBufferSourceFilter(const std::string& name, AVMediaType type, const AVBufferSrcParameters* _Nonnull params) {
-    if ( instances[name] != nullptr ) {
-        return AVERROR(EAGAIN);
-    }
-
     switch(type) {
     case AVMEDIA_TYPE_VIDEO:
         return addVideoBufferSourceFilter(name, params->time_base, params->width, params->height, static_cast<AVPixelFormat>(params->format), params->sample_aspect_ratio, params->frame_rate);
@@ -133,11 +120,13 @@ int FilterGraph::addBufferSourceFilter(const std::string& name, AVMediaType type
     }
 }
 
-int FilterGraph::addAudioBufferSinkFilter(const std::string& name, const int* _Nullable sample_rates, const AVSampleFormat* _Nullable sample_fmts, const std::string& channel_layout) {
-    if ( instances[name] != nullptr ) {
-        return AVERROR(EAGAIN);
-    }
+int FilterGraph::addAudioBufferSinkFilter(const std::string& name, int sample_rate, AVSampleFormat sample_fmt, const std::string& channel_layout) {
+    const AVSampleFormat out_sample_fmts[] = { sample_fmt, AV_SAMPLE_FMT_NONE };
+    const int out_sample_rates[] = { sample_rate, -1 };
+    return addAudioBufferSinkFilter(name, out_sample_rates, out_sample_fmts, channel_layout);
+}
 
+int FilterGraph::addAudioBufferSinkFilter(const std::string& name, const int* _Nullable sample_rates, const AVSampleFormat* _Nullable sample_fmts, const std::string& channel_layout) {
     if ( filter_graph == nullptr ) {
         return AVERROR_INVALIDDATA;
     }
@@ -174,10 +163,6 @@ int FilterGraph::addAudioBufferSinkFilter(const std::string& name, const int* _N
 }
 
 int FilterGraph::addVideoBufferSinkFilter(const std::string& name, const AVPixelFormat* _Nullable pix_fmts) {
-    if ( instances[name] != nullptr ) {
-        return AVERROR(EAGAIN);
-    }
-
     if ( filter_graph == nullptr ) {
         return AVERROR_INVALIDDATA;
     }
@@ -222,7 +207,6 @@ int FilterGraph::addBufferSourceFilter(const std::string& name, AVFilterContext*
         lastOutput->next = node;
     }
     lastOutput = node;
-    instances[name] = buffer_ctx;
     return 0;    
 }
 
@@ -244,14 +228,20 @@ int FilterGraph::addBufferSinkFilter(const std::string& name, AVFilterContext* _
         lastInput->next = node;
     }
     lastInput = node;
-    instances[name] = buffersink_ctx;
     return 0;
 }
 
-int FilterGraph::parse(const std::string& filter_descr) {
+int FilterGraph::parse(const std::string& filter_descr, ParseLinker linker) {
     int ret = avfilter_graph_parse_ptr(filter_graph, filter_descr.c_str(), &inputs, &outputs, NULL);
     if ( ret < 0 ) {
         return ret;
+    }
+
+    if ( linker ) {
+        ret = linker(this, inputs, outputs);
+        if ( ret < 0 ) {
+            return ret;
+        }
     }
 
     avfilter_inout_free(&inputs);
@@ -265,12 +255,120 @@ int FilterGraph::parse(const std::string& filter_descr) {
     return 0;
 }
 
+int FilterGraph::createAudioBufferSourceFilter(const std::string& name, const AVRational time_base, int sample_rate, AVSampleFormat sample_fmt, const std::string& ch_layout_desc, AVFilterContext *_Nullable*_Nullable filter_ctx) {
+    if ( abuffer == nullptr ) {
+        abuffer = avfilter_get_by_name("abuffer");
+    }
+
+    if ( abuffer == nullptr ) {
+        return AVERROR_FILTER_NOT_FOUND;
+    }
+    
+    std::stringstream src_ss;
+    src_ss  << "time_base=" << time_base.num << "/" << time_base.den
+            << ":sample_rate=" << sample_rate
+            << ":sample_fmt=" << av_get_sample_fmt_name(sample_fmt)
+            << ":channel_layout=" << ch_layout_desc;
+
+    AVFilterContext *abuffersrc_ctx = nullptr;
+    int ret = avfilter_graph_create_filter(&abuffersrc_ctx, abuffer, name.c_str(), src_ss.str().c_str(), NULL, filter_graph);
+    if ( ret < 0 ) {
+        return ret;
+    }
+    
+    if ( filter_ctx ) *filter_ctx = abuffersrc_ctx;
+    return 0;
+}
+
+int FilterGraph::createVideoBufferSourceFilter(const std::string& name, const AVRational time_base, int width, int height, AVPixelFormat pix_fmt, const AVRational sar, const AVRational frame_rate, AVFilterContext *_Nullable*_Nullable filter_ctx) {
+    if ( vbuffer == nullptr ) {
+        vbuffer = avfilter_get_by_name("buffer");
+    }
+
+    if ( vbuffer == nullptr ) {
+        return AVERROR_FILTER_NOT_FOUND;
+    }
+    
+    std::stringstream src_ss;
+    src_ss  << "video_size=" << width << "x" << height
+            << ":pix_fmt=" << pix_fmt
+            << ":time_base=" << time_base.num << "/" << time_base.den
+            << ":pixel_aspect=" << sar.num << "/" << sar.den;
+    if ( frame_rate.num ) {
+        src_ss << ":frame_rate=" << frame_rate.num << "/" << frame_rate.den;
+    }
+
+    AVFilterContext *vbuffersrc_ctx = nullptr;
+    int ret = avfilter_graph_create_filter(&vbuffersrc_ctx, vbuffer, name.c_str(), src_ss.str().c_str(), NULL, filter_graph);
+    if ( ret < 0 ) {
+        return ret;
+    }
+    
+    if ( filter_ctx ) *filter_ctx = vbuffersrc_ctx;
+    return 0;
+}
+
+int FilterGraph::createBufferSourceFilter(const std::string& name, AVMediaType type, const AVBufferSrcParameters* _Nonnull params, AVFilterContext *_Nullable*_Nullable filter_ctx) {
+    switch(type) {
+    case AVMEDIA_TYPE_VIDEO:
+        return createVideoBufferSourceFilter(name, params->time_base, params->width, params->height, static_cast<AVPixelFormat>(params->format), params->sample_aspect_ratio, params->frame_rate, filter_ctx);
+    case AVMEDIA_TYPE_AUDIO: {
+        // get channel layout desc
+        char ch_layout_desc[64];
+        av_channel_layout_describe(&params->ch_layout, ch_layout_desc, sizeof(ch_layout_desc));
+        return createAudioBufferSourceFilter(name, params->time_base, params->sample_rate, static_cast<AVSampleFormat>(params->format), ch_layout_desc, filter_ctx);
+    }
+    case AVMEDIA_TYPE_UNKNOWN:
+    case AVMEDIA_TYPE_DATA:
+    case AVMEDIA_TYPE_SUBTITLE:
+    case AVMEDIA_TYPE_ATTACHMENT:
+    case AVMEDIA_TYPE_NB:
+        return AVERROR_INVALIDDATA;
+    }
+}
+
+int FilterGraph::createAudioBufferSinkFilter(const std::string& name, const int sample_rate, const AVSampleFormat sample_fmt, const std::string& ch_layout_desc, AVFilterContext *_Nullable*_Nullable filter_ctx) {
+    if ( abuffersink == nullptr ) {
+        abuffersink = avfilter_get_by_name("abuffersink");
+    }
+    
+    if ( abuffersink == nullptr ) {
+        return AVERROR_FILTER_NOT_FOUND;
+    }
+
+    AVFilterContext *abuffersink_ctx = nullptr;
+    int ret = avfilter_graph_create_filter(&abuffersink_ctx, abuffersink, name.c_str(), NULL, NULL, filter_graph);
+    if ( ret < 0 ) {
+        return ret;
+    }
+    
+    int sample_rates[] = { sample_rate, -1 };
+    ret = av_opt_set_int_list(abuffersink_ctx, "sample_rates", sample_rates, -1, AV_OPT_SEARCH_CHILDREN);
+    if ( ret < 0 ) {
+        return ret;
+    }
+    
+    AVSampleFormat sample_fmts[] = { sample_fmt, AV_SAMPLE_FMT_NONE };
+    ret = av_opt_set_int_list(abuffersink_ctx, "sample_fmts", sample_fmts, AV_SAMPLE_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
+    if ( ret < 0 ) {
+        return ret;
+    }
+    
+    ret = av_opt_set(abuffersink_ctx, "ch_layouts", ch_layout_desc.c_str(), AV_OPT_SEARCH_CHILDREN);
+    if ( ret < 0 ) {
+        return ret;
+    }
+    
+    if ( filter_ctx ) *filter_ctx = abuffersink_ctx;
+    return 0;
+}
+
 int FilterGraph::configure() {
     return avfilter_graph_config(filter_graph, NULL);
 }
 
 int FilterGraph::addFrame(const std::string& src_name, AVFrame* _Nullable frame, int flags) {
-    AVFilterContext *buffer_ctx = instances[src_name];
+    AVFilterContext *buffer_ctx = avfilter_graph_get_filter(filter_graph, src_name.c_str());
     if ( buffer_ctx == nullptr ) {
         return AVERROR_FILTER_NOT_FOUND;
     }
@@ -279,7 +377,7 @@ int FilterGraph::addFrame(const std::string& src_name, AVFrame* _Nullable frame,
 }
 
 int FilterGraph::getFrame(const std::string& sink_name, AVFrame* _Nonnull frame) {
-    AVFilterContext *buffersink_ctx = instances[sink_name];
+    AVFilterContext *buffersink_ctx = avfilter_graph_get_filter(filter_graph, sink_name.c_str());
     if ( buffersink_ctx == nullptr ) {
         return AVERROR_FILTER_NOT_FOUND;
     }

@@ -74,6 +74,10 @@ int64_t PacketQueue::getLastPopPts() {
     return last_pop_pts;
 }
 
+int64_t PacketQueue::getFrontPacketPts() {
+    return queue.empty() ? AV_NOPTS_VALUE : queue.front()->pts;
+}
+
 size_t PacketQueue::getCount() {
     return queue.size();
 }
