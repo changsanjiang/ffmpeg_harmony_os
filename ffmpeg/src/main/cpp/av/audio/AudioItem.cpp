@@ -79,6 +79,10 @@ int AudioItem::tryTranscode(int frameCapacity, void **outData, int64_t *outPtsMs
     int ret = mTranscoder->tryTranscode(frameCapacity, outData, &pts, outEOF);
     if ( ret > 0 ) {
         *outPtsMs = av_rescale_q(pts, mTranscoder->getOutputTimeBase(), (AVRational){ 1, 1000 });
+        
+        if ( !mTranscoder->isPacketBufferFull() ) {
+            mReader->setPacketBufferFull(false);
+        }
     }
     return ret;
 }

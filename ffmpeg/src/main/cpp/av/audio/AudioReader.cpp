@@ -124,8 +124,9 @@ void AudioReader::reset() {
 }
 
 void AudioReader::setPacketBufferFull(bool is_full) {
-    is_pkt_buffer_full.store(is_full);
-    cv.notify_all();
+    if ( is_pkt_buffer_full.exchange(is_full, std::__n1::memory_order_relaxed) != is_full ) {
+        cv.notify_all();
+    }
 }
 
 void AudioReader::setReadyToReadCallback(AudioReader::ReadyToReadCallback callback) {
