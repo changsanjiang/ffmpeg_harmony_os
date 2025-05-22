@@ -15,24 +15,17 @@
     along with @sj/ffmpeg. If not, see <http://www.gnu.org/licenses/>.
  * */
 //
-// Created on 2025/1/7.
+// Created by sj on 2025/1/7.
 //
 // Node APIs are not fully supported. To solve the compilation error of the interface cannot be found,
 // please include "napi/native_api.h".
 
-#ifndef FFMPEGPROJ_MEDIAREADER_H
-#define FFMPEGPROJ_MEDIAREADER_H
+#ifndef FFAV_MediaReader_hpp
+#define FFAV_MediaReader_hpp
 
-#include <map>
 #include <string>
-
-extern "C" {
-#include <libavformat/avformat.h>
-#include <libavcodec/packet.h>
-#include <libavcodec/avcodec.h>
-#include <libavcodec/codec.h>
-#include <libavutil/avutil.h>
-}
+#include <map>
+#include "ff_types.hpp"
 
 namespace FFAV {
 
@@ -43,7 +36,7 @@ public:
     ~MediaReader();
 
     // 打开媒体文件
-    int open(const std::string& url, const std::map<std::string, std::string>& http_options);
+    int open(const std::string& url, const std::map<std::string, std::string>& http_options = {});
     
     // 获取流的数量
     unsigned int getStreamCount();
@@ -51,7 +44,7 @@ public:
     // 获取指定流的 AVStream
     AVStream* _Nullable getStream(int stream_index);    
     AVStream* _Nullable getBestStream(AVMediaType type);
-    AVStream** _Nullable getStreams();
+    AVStream*_Nonnull* _Nullable getStreams();
 
     /* av_find_best_stream
      *
@@ -78,16 +71,15 @@ public:
     */
     int seek(int64_t timestamp, int stream_index, int flags = AVSEEK_FLAG_BACKWARD);
 
-    // 中断读取
-    void interrupt();
-
+    void setInterrupted();
+    
 private:
-    AVFormatContext* _Nullable fmt_ctx = nullptr;     // AVFormatContext 用于管理媒体文件
-    std::atomic<bool> interrupt_requested { false };  // 请求读取中断
-
-    // 关闭媒体文件
     void release();
+    
+private:
+    AVFormatContext* _Nullable _fmt_ctx = nullptr;     // AVFormatContext 用于管理媒体文件
+    std::atomic<bool> _interrupt_requested { false };  // 请求读取中断
 };
 
 }
-#endif //FFMPEGPROJ_MEDIAREADER_H
+#endif //FFAV_MediaReader_hpp

@@ -15,16 +15,17 @@
     along with @sj/ffmpeg. If not, see <http://www.gnu.org/licenses/>.
  * */
 //
-// Created on 2025/1/7.
+// Created by sj on 2025/1/7.
 //
 // Node APIs are not fully supported. To solve the compilation error of the interface cannot be found,
 // please include "napi/native_api.h".
 
-#include "MediaDecoder.h"
+#include "ff_media_decoder.hpp"
+#include "ff_includes.hpp"
 
 namespace FFAV {
 
-MediaDecoder::MediaDecoder(): dec_ctx(nullptr) {
+MediaDecoder::MediaDecoder() {
 
 }
 
@@ -40,20 +41,20 @@ int MediaDecoder::init(AVCodecParameters* _Nonnull codecpar) {
     }
 
     // 创建解码器上下文
-    dec_ctx = avcodec_alloc_context3(codec);
-    if ( dec_ctx == nullptr ) {
+    _dec_ctx = avcodec_alloc_context3(codec);
+    if ( _dec_ctx == nullptr ) {
         return AVERROR(ENOMEM);
     }
 
     // 初始化解码器上下文
     // Copy decoder parameters to decoder context
-    int error = avcodec_parameters_to_context(dec_ctx, codecpar);
+    int error = avcodec_parameters_to_context(_dec_ctx, codecpar);
     if ( error < 0 ) {
         return error;
     }    
     
     // 打开解码器
-    error = avcodec_open2(dec_ctx, codec, nullptr);
+    error = avcodec_open2(_dec_ctx, codec, nullptr);
     if ( error < 0 ) {
         return error;
     }
@@ -61,51 +62,51 @@ int MediaDecoder::init(AVCodecParameters* _Nonnull codecpar) {
 }
 
 int MediaDecoder::send(AVPacket* _Nullable pkt) {
-    if ( dec_ctx == nullptr ) {
+    if ( _dec_ctx == nullptr ) {
         return AVERROR_INVALIDDATA;
     }
     
-    return avcodec_send_packet(dec_ctx, pkt);
+    return avcodec_send_packet(_dec_ctx, pkt);
 }
 
 int MediaDecoder::receive(AVFrame* _Nonnull frame) {
-    if ( dec_ctx == nullptr ) {
+    if ( _dec_ctx == nullptr ) {
         return AVERROR_INVALIDDATA;
     }
     
-    return avcodec_receive_frame(dec_ctx, frame);
+    return avcodec_receive_frame(_dec_ctx, frame);
 }
 
 void MediaDecoder::flush() {
-    if ( dec_ctx != nullptr ) {
-        avcodec_flush_buffers(dec_ctx);
+    if ( _dec_ctx != nullptr ) {
+        avcodec_flush_buffers(_dec_ctx);
     }
 }
 
-AVBufferSrcParameters* _Nullable MediaDecoder::createBufferSrcParameters(AVRational time_base) {
-    if ( dec_ctx == nullptr ) {
+AVBufferSrcParameters* _Nullable MediaDecoder::createBufferSrcParameters(AVRational stream_time_base) {
+    if ( _dec_ctx == nullptr ) {
         return nullptr;
     }
     
-    switch(dec_ctx->codec_type) {
+    switch(_dec_ctx->codec_type) {
         case AVMEDIA_TYPE_VIDEO: {
             AVBufferSrcParameters *params = av_buffersrc_parameters_alloc();
-            params->width = dec_ctx->width;
-            params->height = dec_ctx->height;
-            params->format = dec_ctx->pix_fmt;
-            params->time_base = time_base;
-            params->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
-            params->hw_frames_ctx = dec_ctx->hw_frames_ctx;
-            if ( dec_ctx->framerate.num ) params->frame_rate = dec_ctx->framerate;
+            params->width = _dec_ctx->width;
+            params->height = _dec_ctx->height;
+            params->format = _dec_ctx->pix_fmt;
+            params->time_base = stream_time_base;
+            params->sample_aspect_ratio = _dec_ctx->sample_aspect_ratio;
+            params->hw_frames_ctx = _dec_ctx->hw_frames_ctx;
+            if ( _dec_ctx->framerate.num ) params->frame_rate = _dec_ctx->framerate;
             return params;
         }
         case AVMEDIA_TYPE_AUDIO: {
-            if ( dec_ctx->ch_layout.order == AV_CHANNEL_ORDER_UNSPEC ) av_channel_layout_default(&dec_ctx->ch_layout, dec_ctx->ch_layout.nb_channels);
+            if ( _dec_ctx->ch_layout.order == AV_CHANNEL_ORDER_UNSPEC ) av_channel_layout_default(&_dec_ctx->ch_layout, _dec_ctx->ch_layout.nb_channels);
             AVBufferSrcParameters *params = av_buffersrc_parameters_alloc();
-            params->time_base = time_base;
-            params->sample_rate = dec_ctx->sample_rate;
-            params->format = dec_ctx->sample_fmt;
-            params->ch_layout = dec_ctx->ch_layout;
+            params->time_base = stream_time_base;
+            params->sample_rate = _dec_ctx->sample_rate;
+            params->format = _dec_ctx->sample_fmt;
+            params->ch_layout = _dec_ctx->ch_layout;
             return params;
         }
         case AVMEDIA_TYPE_UNKNOWN:
@@ -118,20 +119,20 @@ AVBufferSrcParameters* _Nullable MediaDecoder::createBufferSrcParameters(AVRatio
 }
 
 AVSampleFormat MediaDecoder::getSampleFormat() {
-    return dec_ctx->sample_fmt;
+    return _dec_ctx->sample_fmt;
 }
 
 int MediaDecoder::getSampleRate() {
-    return dec_ctx->sample_rate;
+    return _dec_ctx->sample_rate;
 }
 
 int MediaDecoder::getChannels() {
-    return dec_ctx->ch_layout.nb_channels;
+    return _dec_ctx->ch_layout.nb_channels;
 }
 
 void MediaDecoder::release() {
-    if ( dec_ctx != nullptr ) {
-        avcodec_free_context(&dec_ctx);
+    if ( _dec_ctx != nullptr ) {
+        avcodec_free_context(&_dec_ctx);
     }
 }
 

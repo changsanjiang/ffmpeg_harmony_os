@@ -21,7 +21,8 @@
 // please include "napi/native_api.h".
 
 #include "FFAudioWriter.h"
-#include "av/core/AudioUtils.h"
+#include "av/core/ff_audio_utils.hpp"
+#include "av/util/OHAudioStreamUtils.hpp"
 #include "extension/client_print.h"
 #include <stdint.h>
 
@@ -120,7 +121,7 @@ napi_status FFAudioWriter::ParseStreamInfo(napi_env env, napi_value stream_info_
         return napi_invalid_arg;
     }
     
-    AVSampleFormat in_sample_fmt = AudioUtils::ohToAVSampleFormat((OH_AudioStream_SampleFormat)sample_fmt);
+    AVSampleFormat in_sample_fmt = OHAudioStreamUtils::ohToAVSampleFormat((OH_AudioStream_SampleFormat)sample_fmt);
     int in_sample_rate = sample_rate;
     int in_nb_channels = nb_channels;
     

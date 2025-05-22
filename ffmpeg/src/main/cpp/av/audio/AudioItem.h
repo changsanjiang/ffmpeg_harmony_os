@@ -7,22 +7,20 @@
 #ifndef FFMPEG_HARMONY_OS_AUDIOITEM_H
 #define FFMPEG_HARMONY_OS_AUDIOITEM_H
 
-#include "av/audio/AudioReader.h"
-#include "av/audio/AudioTranscoder.h"
-#include "av/util/TaskScheduler.h"
-#include "av/util/NetworkReachability.h"
 #include <ohaudio/native_audiostream_base.h>
 #include <stdint.h>
 #include <functional>
 #include <string>
 #include <map>
 #include <mutex>
-
-extern "C" {
-#include <libavutil/samplefmt.h>
-}
+#include "av/core/ff_types.hpp"
+#include "av/util/NetworkReachability.h"
+#include "av/util/TaskScheduler.h"
 
 namespace FFAV {
+
+class AudioPacketReader;
+class AudioTranscoder;
 
 class AudioItem {
     
@@ -44,7 +42,7 @@ public:
      * 当 eof 时可能返回的样本数量小于指定的样本数量;
      * 如果未到 eof 数据不满足指定的样本数量时返回 0;
      *  */
-    int tryTranscode(int frameCapacity, void **outData, int64_t *outPtsMs, bool *outEOF);
+    int tryTranscode(void **outData, int frameCapacity, int64_t *outPtsMs, bool *outEOF);
 
     void seek(int64_t timeMs);
     
@@ -65,10 +63,10 @@ public:
     
 private:
     std::string mUrl;
-    int64_t mStartTimePosMs { AV_NOPTS_VALUE };
+    int64_t mStartTimePos { AV_NOPTS_VALUE }; // in base q
     std::map<std::string, std::string> mHttpOptions;
     
-    AudioReader *mReader { nullptr };
+    AudioPacketReader *mReader { nullptr };
     AudioTranscoder *mTranscoder { nullptr };
     
     std::atomic<int64_t> mDurationMs { 0 };
@@ -98,13 +96,13 @@ private:
         unsigned int mRegisteredNetworkStatusChangeCallback;
     } mFlags { 0 };
     
-    void onReadyToRead(AudioReader* reader, AVStream* stream);
-    void onReadPacket(AudioReader* reader, AVPacket* pkt, bool should_flush);
-    void onReadError(AudioReader* reader, int ff_err);
+    void onStreamReady(AudioPacketReader* reader, AVStream* stream);
+    void onReadPacket(AudioPacketReader* reader, AVPacket* pkt, bool should_flush);
+    void onReadError(AudioPacketReader* reader, int ff_err);
     
     void setNeedsReprepareReader();
     void reprepareReaderIfNeeded();
-    void onReprepareReader(int64_t startTimePosMs);
+    void onReprepareReader(int64_t startTimePos); // startTimePos in base q
     
     void onNetworkStatusChange(NetworkStatus status);
 };

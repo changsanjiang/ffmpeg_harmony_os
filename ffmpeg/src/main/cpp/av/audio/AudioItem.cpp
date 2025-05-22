@@ -6,15 +6,23 @@
 
 #include "AudioItem.h"
 #include <stdint.h>
+#include "av/core/ff_audio_packet_reader.hpp"
+#include "av/core/ff_audio_transcoder.hpp"
 
 namespace FFAV {
 
+const int OUTPUT_SAMPLE_RATE = 44100;
+const AVSampleFormat OUTPUT_SAMPLE_FORMAT = AV_SAMPLE_FMT_S16;
+const int OUTPUT_CHANNELS = 2;
+const std::string OUTPUT_CHANNEL_LAYOUT_DESC = "stereo";
+const OH_AudioStream_SampleFormat OH_OUTPUT_SAMPLE_FORMAT = OH_AudioStream_SampleFormat::AUDIOSTREAM_SAMPLE_S16LE;
+
 AudioItem::AudioItem(const std::string &url, int64_t start_time_pos_ms, const std::map<std::string, std::string> &http_options): mUrl(url), mHttpOptions(http_options) {
-    mReader = new AudioReader(url, http_options);
+    mReader = new AudioPacketReader();
     mTranscoder = new AudioTranscoder();
     
     if ( start_time_pos_ms > 0 ) {
-        mStartTimePosMs = start_time_pos_ms;
+        mStartTimePos = av_rescale_q(start_time_pos_ms, (AVRational){ 1, 1000 }, AV_TIME_BASE_Q);
     }
 }
 
@@ -42,19 +50,19 @@ AudioItem::~AudioItem() {
 }
 
 int AudioItem::getOutputSampleRate() {
-    return AudioTranscoder::OUTPUT_SAMPLE_RATE;
+    return OUTPUT_SAMPLE_RATE;
 }
 
 AVSampleFormat AudioItem::getOutputSampleFormat() {
-    return AudioTranscoder::OUTPUT_SAMPLE_FORMAT;
+    return OUTPUT_SAMPLE_FORMAT;
 }
 
 OH_AudioStream_SampleFormat AudioItem::getOutputOHSampleFormat() {
-    return AudioTranscoder::OH_OUTPUT_SAMPLE_FORMAT;
+    return OH_OUTPUT_SAMPLE_FORMAT;
 }
 
 int AudioItem::getOutputChannels() {
-    return AudioTranscoder::OUTPUT_CHANNELS;
+    return OUTPUT_CHANNELS;
 }
 
 void AudioItem::prepare() {
@@ -63,22 +71,22 @@ void AudioItem::prepare() {
         return;
     }
     mFlags.mPrepareInvoked = true;
-    mReader->setReadyToReadCallback(std::bind(&AudioItem::onReadyToRead, this, std::placeholders::_1, std::placeholders::_2));
+    mReader->setAudioStreamReadyCallback(std::bind(&AudioItem::onStreamReady, this, std::placeholders::_1, std::placeholders::_2));
     mReader->setReadPacketCallback(std::bind(&AudioItem::onReadPacket, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-    mReader->setReadErrorCallback(std::bind(&AudioItem::onReadError, this, std::placeholders::_1, std::placeholders::_2));
-    mReader->prepare(mStartTimePosMs);
+    mReader->setErrorCallback(std::bind(&AudioItem::onReadError, this, std::placeholders::_1, std::placeholders::_2));
+    mReader->prepare(mUrl, mStartTimePos, mHttpOptions);
 }
 
-int AudioItem::tryTranscode(int frameCapacity, void **outData, int64_t *outPtsMs, bool *outEOF) {
+int AudioItem::tryTranscode(void **outData, int frameCapacity, int64_t *outPtsMs, bool *outEOF) {
     std::lock_guard<std::mutex> lock(mtx);
     if ( !mFlags.mReady || mFlags.mSeeking ) {
         return 0;
     }
     
     int64_t pts = 0;
-    int ret = mTranscoder->tryTranscode(frameCapacity, outData, &pts, outEOF);
+    int ret = mTranscoder->tryTranscode(outData, frameCapacity, &pts, outEOF);
     if ( ret > 0 ) {
-        *outPtsMs = av_rescale_q(pts, mTranscoder->getOutputTimeBase(), (AVRational){ 1, 1000 });
+        *outPtsMs = av_rescale_q(pts, (AVRational){ 1, OUTPUT_SAMPLE_RATE }, (AVRational){ 1, 1000 });
         
         if ( !mTranscoder->isPacketBufferFull() ) {
             mReader->setPacketBufferFull(false);
@@ -94,12 +102,12 @@ void AudioItem::seek(int64_t timeMs) {
     if ( mFlags.mShouldReprepareReader ) {
         mFlags.mSeekedBeforeReprepareReader = true;
         mFlags.mShouldOnlyFlushPackets = false;
-        mStartTimePosMs = timeMs;
-        onReprepareReader(mStartTimePosMs);
+        mStartTimePos = av_rescale_q(timeMs, (AVRational){ 1, 1000 }, AV_TIME_BASE_Q);
+        onReprepareReader(mStartTimePos);
         return;
     }
 
-    mReader->seek(timeMs);
+    mReader->seekTo(av_rescale_q(timeMs, (AVRational){ 1, 1000 }, AV_TIME_BASE_Q));
 }
 
 int64_t AudioItem::getDurationMs() {
@@ -122,7 +130,7 @@ void AudioItem::setOnPlayableDurationChangeCallback(AudioItem::OnPlayableDuratio
     mOnPlayableDurationChangeCallback = callback;
 }
 
-void AudioItem::onReadyToRead(AudioReader* reader, AVStream* stream) {
+void AudioItem::onStreamReady(AudioPacketReader* reader, AVStream* stream) {
     int ff_ret = 0;
     int64_t durationMs = 0;
     {
@@ -139,7 +147,7 @@ void AudioItem::onReadyToRead(AudioReader* reader, AVStream* stream) {
         
         durationMs = av_rescale_q(stream->duration, stream->time_base, (AVRational){ 1, 1000 });
         mDurationMs.store(durationMs, std::__n1::memory_order_relaxed);
-        ff_ret = mTranscoder->prepareByAudioStream(stream);
+        ff_ret = mTranscoder->init(stream, OUTPUT_SAMPLE_RATE, OUTPUT_SAMPLE_FORMAT, OUTPUT_CHANNELS);
         
         // ready
         if ( ff_ret == 0 ) {
@@ -156,7 +164,7 @@ void AudioItem::onReadyToRead(AudioReader* reader, AVStream* stream) {
     if ( mOnDurationChangeCallback ) mOnDurationChangeCallback(durationMs);
 }
 
-void AudioItem::onReadPacket(AudioReader* reader, AVPacket* pkt, bool should_flush) {
+void AudioItem::onReadPacket(AudioPacketReader* reader, AVPacket* pkt, bool should_flush) {
     int ff_ret = 0;
     int64_t playableDurationMs = AV_NOPTS_VALUE;
     {
@@ -176,16 +184,18 @@ void AudioItem::onReadPacket(AudioReader* reader, AVPacket* pkt, bool should_flu
         }
     
         // flush
-        if ( should_flush ) {
-            ff_ret = mTranscoder->flush(mFlags.mShouldOnlyFlushPackets);
-            if ( ff_ret < 0 ) {
-                goto on_exit;
-            }
-            mFlags.mShouldOnlyFlushPackets = false;
-        }
-        
         // push pkt
-        ff_ret = mTranscoder->push(pkt);
+        AudioTranscoder::FlushMode flushMode = AudioTranscoder::FlushMode::None;
+        if ( should_flush ) {
+            if ( mFlags.mShouldOnlyFlushPackets ) {
+                flushMode = AudioTranscoder::FlushMode::PacketOnly;
+                mFlags.mShouldOnlyFlushPackets = false;
+            }
+            else {
+                flushMode = AudioTranscoder::FlushMode::Full;
+            }
+        }
+        ff_ret = mTranscoder->enqueue(pkt, flushMode);
          if ( ff_ret < 0 ) {
             goto on_exit;
         }
@@ -194,7 +204,7 @@ void AudioItem::onReadPacket(AudioReader* reader, AVPacket* pkt, bool should_flu
             reader->setPacketBufferFull(true);
         }
         
-        playableDurationMs = av_rescale_q(mTranscoder->getPlayableEndTime(), mTranscoder->getStreamTimeBase(), (AVRational){ 1, 1000 });
+        playableDurationMs = av_rescale_q(mTranscoder->getLastPresentationPacketEndPts(), mTranscoder->getStreamTimeBase(), (AVRational){ 1, 1000 });
         mPlayableDurationMs.store(playableDurationMs, std::__n1::memory_order_relaxed);
     }
 on_exit:
@@ -209,7 +219,7 @@ on_exit:
     }
 }
 
-void AudioItem::onReadError(AudioReader* reader, int ff_err) {
+void AudioItem::onReadError(AudioPacketReader* reader, int ff_err) {
     {
         std::lock_guard<std::mutex> lock(mtx);
         if ( ff_err == AVERROR(EIO) ||
@@ -266,26 +276,26 @@ void AudioItem::reprepareReaderIfNeeded() {
         // - 等待期间用户可能调用seek, 需要从seek的位置开始播放(模糊位置)
         // - 如果未执行seek操作, 则需要从当前位置开始播放(精确位置), 需要在解码时对齐数据
         if ( !mFlags.mReady || mFlags.mSeekedBeforeReprepareReader ) {
-            onReprepareReader(mStartTimePosMs);
+            onReprepareReader(mStartTimePos);
             return;
         }
         
         // - 如果未执行seek操作, 则需要从当前位置开始播放(精确位置), 需要在解码时对齐数据
-        int64_t endPts = mTranscoder->getFifoEndTime();
+        int64_t endPts = mTranscoder->getFifoEndPts();
         // 需要保留 fifo 中的缓存, 并且新的数据需要对齐到 fifo 中;
         mFlags.mShouldOnlyFlushPackets = true;
-        onReprepareReader(av_rescale_q(endPts, mTranscoder->getOutputTimeBase(), (AVRational){ 1, 1000 }));
+        onReprepareReader(av_rescale_q(endPts, (AVRational){ 1, OUTPUT_SAMPLE_RATE }, (AVRational){ 1, 1000 }));
     }
 }
 
-void AudioItem::onReprepareReader(int64_t startTimePosMs) {
+void AudioItem::onReprepareReader(int64_t startTimePos) {
     if ( mRepreareReaderTask ) {
         mRepreareReaderTask->tryCancel();
         mRepreareReaderTask = nullptr;
     }
     mFlags.mShouldReprepareReader = false;
     mReader->reset();
-    mReader->prepare(startTimePosMs);
+    mReader->prepare(mUrl, startTimePos, mHttpOptions);
 }
 
 void AudioItem::onNetworkStatusChange(NetworkStatus network_status) {

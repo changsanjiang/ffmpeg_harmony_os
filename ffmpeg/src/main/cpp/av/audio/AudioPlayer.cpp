@@ -22,6 +22,7 @@
 
 #include "AudioPlayer.h"
 #include "extension/client_print.h"
+#include <cerrno>
 #include <stdint.h>
 
 namespace FFAV {
@@ -175,7 +176,7 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* writ
     int capacity = write_buffer_size_in_bytes / output_nb_bytes_per_sample / output_nb_channels;
     int64_t pts = 0;
     bool eof = false;
-    int ret = audio_item->tryTranscode(capacity, &write_buffer, &pts, &eof);
+    int ret = audio_item->tryTranscode(&write_buffer, capacity, &pts, &eof);
     
     int samples_read = ret > 0 ? ret : 0;
     if ( samples_read < capacity ) {
@@ -190,7 +191,7 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* writ
         onPause(PlayWhenReadyChangeReason::PLAYBACK_ENDED);
     }
     // error
-    else if ( ret < 0 ) {
+    else if ( ret < 0 && ret != AVERROR(EAGAIN) && ret != AVERROR_EOF ) {
         onFFmpegError(ret);
     }
     else if ( samples_read > 0 ) {

@@ -15,26 +15,19 @@
     along with @sj/ffmpeg. If not, see <http://www.gnu.org/licenses/>.
  * */
 //
-// Created on 2025/1/10.
+// Created by sj on 2025/1/10.
 //
 // Node APIs are not fully supported. To solve the compilation error of the interface cannot be found,
 // please include "napi/native_api.h".
 
-#ifndef FFMPEGPROJ_FILTERGRAPH_H
-#define FFMPEGPROJ_FILTERGRAPH_H
+#ifndef FFAV_FilterGraph_hpp
+#define FFAV_FilterGraph_hpp
 
 #include <string>
+#include <unordered_map>
 #include <functional>
+#include "ff_types.hpp"
 
-extern "C" {
-#include "libavfilter/avfilter.h"
-#include "libavutil/avutil.h"
-#include "libavutil/samplefmt.h"
-#include "libavutil/pixfmt.h"
-#include "libavfilter/buffersrc.h"
-#include "libavutil/frame.h"
-#include "libavutil/rational.h"
-}
 namespace FFAV {
 
 class FilterGraph {
@@ -44,23 +37,27 @@ public:
 
     int init();
 
-    int addAudioBufferSourceFilter(const std::string& name, const AVRational time_base, int sample_rate, AVSampleFormat sample_fmt, const AVChannelLayout ch_layout);
+    int addAudioBufferSourceFilter(const std::string& name, const AVRational time_base, int sample_rate, AVSampleFormat sample_fmt, const std::string& ch_layout_desc);
     int addVideoBufferSourceFilter(const std::string& name, const AVRational time_base, int width, int height, AVPixelFormat pix_fmt, const AVRational sar, const AVRational frame_rate);
     int addBufferSourceFilter(const std::string& name, AVMediaType type, const AVBufferSrcParameters* _Nonnull params);
 
-    int addAudioBufferSinkFilter(const std::string& name, const int* sample_rates, const AVSampleFormat* sample_fmts, const std::string& channel_layout);
-    int addAudioBufferSinkFilter(const std::string& name, int sample_rate, AVSampleFormat sample_fmt, const std::string& channel_layout);
+    int addAudioBufferSinkFilter(const std::string& name, const int* _Nullable sample_rates, const AVSampleFormat* _Nullable sample_fmts, const std::string& channel_layout);
+    
+    int addAudioBufferSinkFilter(const std::string& name, const int sample_rate, const AVSampleFormat sample_fmt, const std::string& channel_layout);
+    
     int addVideoBufferSinkFilter(const std::string& name, const AVPixelFormat* _Nullable pix_fmts);
 
-    using ParseLinker = std::function<int(FFAV::FilterGraph*_Nonnull filter_graph, AVFilterInOut*_Nullable inputs, AVFilterInOut*_Nullable outputs)>;
+    
+    using ParseLinker = std::function<int(FilterGraph*_Nonnull filter_graph, AVFilterInOut*_Nullable inputs, AVFilterInOut*_Nullable outputs)>;
+
     int parse(const std::string& filter_descr, ParseLinker linker = nullptr);
+    
+    int createAudioBufferSourceFilter(const std::string& name, const AVRational time_base, int sample_rate, AVSampleFormat sample_fmt, const std::string& ch_layout_desc, AVFilterContext *_Nullable*_Nullable filter_ctx);
+    int createVideoBufferSourceFilter(const std::string& name, const AVRational time_base, int width, int height, AVPixelFormat pix_fmt, const AVRational sar, const AVRational frame_rate, AVFilterContext *_Nullable*_Nullable filter_ctx);
+    int createBufferSourceFilter(const std::string& name, AVMediaType type, const AVBufferSrcParameters* _Nonnull params, AVFilterContext *_Nullable*_Nullable filter_ctx);
 
-    int createAudioBufferSourceFilter(const std::string& name, const AVRational time_base, int sample_rate, AVSampleFormat sample_fmt, const std::string& ch_layout_desc, AVFilterContext *_Nullable*_Nullable out_filter_ctx);
-    int createVideoBufferSourceFilter(const std::string& name, const AVRational time_base, int width, int height, AVPixelFormat pix_fmt, const AVRational sar, const AVRational frame_rate, AVFilterContext *_Nullable*_Nullable out_filter_ctx);
-    int createBufferSourceFilter(const std::string& name, AVMediaType type, const AVBufferSrcParameters* _Nonnull params, AVFilterContext *_Nullable*_Nullable out_filter_ctx);
-
-    int createAudioBufferSinkFilter(const std::string& name, const int sample_rate, const AVSampleFormat sample_fmt, const std::string& ch_layout_desc, AVFilterContext *_Nullable*_Nullable out_filter_ctx);
-
+    int createAudioBufferSinkFilter(const std::string& name, const int sample_rate, const AVSampleFormat sample_fmt, const std::string& ch_layout_desc, AVFilterContext *_Nullable*_Nullable filter_ctx);
+    
     int configure();
     
     /**
@@ -118,21 +115,23 @@ public:
     int sendCommand(const std::string& target_name, const std::string& cmd, const std::string& arg, int flags = AVFILTER_CMD_FLAG_ONE);
     
 private:
-    AVFilterGraph* _Nullable filter_graph = nullptr;
-    AVFilterInOut* _Nullable outputs = nullptr;
-    AVFilterInOut* _Nullable inputs = nullptr;
-    AVFilterInOut* _Nullable lastOutput = nullptr;
-    AVFilterInOut* _Nullable lastInput = nullptr;
-    
-    const AVFilter* _Nullable abuffer = nullptr;
-    const AVFilter* _Nullable vbuffer = nullptr;
-
-    const AVFilter* _Nullable abuffersink = nullptr;
-    const AVFilter* _Nullable vbuffersink = nullptr;
     int addBufferSourceFilter(const std::string& name, AVFilterContext* _Nonnull buffer_ctx);
     int addBufferSinkFilter(const std::string& name, AVFilterContext* _Nonnull buffersink_ctx);
     void release();
+    
+private:
+    AVFilterGraph* _Nullable _filter_graph = nullptr;
+    AVFilterInOut* _Nullable _outputs = nullptr;
+    AVFilterInOut* _Nullable _inputs = nullptr;
+    AVFilterInOut* _Nullable _lastOutput = nullptr;
+    AVFilterInOut* _Nullable _lastInput = nullptr;
+    
+    const AVFilter* _Nullable _abuffer = nullptr;
+    const AVFilter* _Nullable _vbuffer = nullptr;
+
+    const AVFilter* _Nullable _abuffersink = nullptr;
+    const AVFilter* _Nullable _vbuffersink = nullptr;
 };
 
 }
-#endif //FFMPEGPROJ_FILTERGRAPH_H
+#endif //FFAV_FilterGraph_hpp

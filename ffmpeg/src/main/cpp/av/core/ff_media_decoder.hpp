@@ -15,50 +15,47 @@
     along with @sj/ffmpeg. If not, see <http://www.gnu.org/licenses/>.
  * */
 //
-// Created on 2025/2/8.
+// Created by sj on 2025/1/7.
 //
 // Node APIs are not fully supported. To solve the compilation error of the interface cannot be found,
 // please include "napi/native_api.h".
 
-#ifndef FFMPEGPROJ_PACKETQUEUE_H
-#define FFMPEGPROJ_PACKETQUEUE_H
+#ifndef FFAV_MediaDecoder_hpp
+#define FFAV_MediaDecoder_hpp
 
-#include <cstdint>
-extern "C" {
-#include <libavutil/avutil.h>
-#include <libavcodec/avcodec.h>
-}
-
-#include <queue>
+#include "ff_types.hpp"
 
 namespace FFAV {
 
-class PacketQueue {
+/** 用于解码 */
+class MediaDecoder {
 public:
-    PacketQueue();
-    ~PacketQueue();
-    
-    void push(AVPacket* _Nonnull packet);
-    bool pop(AVPacket* _Nonnull packet);
-    void clear();
-    
-    int64_t getLastPushPts();
-    int64_t getLastPopPts();
+    MediaDecoder();
+    ~MediaDecoder();
 
-    int64_t getFrontPacketPts();
+    int init(AVCodecParameters* _Nonnull codecpar);
+
+    int send(AVPacket* _Nullable pkt);
     
-    // 获取所有数据包的数量
-    size_t getCount();
+    int receive(AVFrame* _Nonnull frame);
 
-    // 获取所有数据包的数据占用的字节数
-    int64_t getSize();
+    void flush();
 
+    // 生成 buffersrc filter 的构建参数;
+    AVBufferSrcParameters* _Nullable createBufferSrcParameters(AVRational stream_time_base);
+
+    AVSampleFormat getSampleFormat();
+    int getSampleRate();
+    int getChannels();
+    
 private:
-    std::queue<AVPacket*> queue;
-    int64_t total_size = 0;
-    int64_t last_push_pts = AV_NOPTS_VALUE; 
-    int64_t last_pop_pts = AV_NOPTS_VALUE;
+    // 关闭媒体文件
+    void release();
+    
+private:
+    AVCodecContext* _Nullable _dec_ctx { nullptr };      // AVCodecContext 用于解码
 };
 
 }
-#endif //FFMPEGPROJ_PACKETQUEUE_H
+
+#endif //FFAV_MediaDecoder_hpp

@@ -26,8 +26,7 @@
 #include "av/audio/AudioPlaybackOptions.h"
 #include "av/audio/EventMessageQueue.h"
 #include "av/audio/AudioItem.h"
-#include "av/core/AudioRenderer.h"
-#include "av/util/TaskScheduler.h"
+#include "av/audio/AudioRenderer.h"
 #include <stdint.h>
 #include <memory>
 

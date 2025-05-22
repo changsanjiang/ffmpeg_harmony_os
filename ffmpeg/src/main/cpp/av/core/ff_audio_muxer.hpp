@@ -15,23 +15,16 @@
     along with @sj/ffmpeg. If not, see <http://www.gnu.org/licenses/>.
  * */
 //
-// Created on 2025/3/11.
+// Created by sj on 2025/3/11.
 //
 // Node APIs are not fully supported. To solve the compilation error of the interface cannot be found,
 // please include "napi/native_api.h".
 
-#ifndef PRIVATE_FFMPEG_HARMONY_OS_AUDIOMUXER_H
-#define PRIVATE_FFMPEG_HARMONY_OS_AUDIOMUXER_H
+#ifndef FFAV_AudioMuxer_hpp
+#define FFAV_AudioMuxer_hpp
 
 #include <string>
-
-extern "C" {
-#include "libavformat/avformat.h"
-#include "libavcodec/avcodec.h"
-#include "libavcodec/codec.h"
-#include "libavutil/frame.h"
-#include "libavutil/rational.h"
-}
+#include "ff_types.hpp"
 
 namespace FFAV {
 
@@ -78,12 +71,12 @@ public:
     int writeTrailer();
     
 private:
-    std::string file_path;
-    AVFormatContext* fmt_ctx { nullptr };
-    AVRational time_base;
-    AVStream* stream { nullptr };
+    std::string _file_path;
+    AVFormatContext* _fmt_ctx { nullptr };
+    AVRational _time_base;
+    AVStream* _stream { nullptr };
 };
 
 }
 
-#endif //PRIVATE_FFMPEG_HARMONY_OS_AUDIOMUXER_H
+#endif //FFAV_AudioMuxer_hpp

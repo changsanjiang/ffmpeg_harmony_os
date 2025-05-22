@@ -15,21 +15,24 @@
     along with @sj/ffmpeg. If not, see <http://www.gnu.org/licenses/>.
  * */
 //
-// Created on 2025/3/11.
+// Created by sj on 2025/3/11.
 //
 // Node APIs are not fully supported. To solve the compilation error of the interface cannot be found,
 // please include "napi/native_api.h".
 
-#ifndef PRIVATE_FFMPEG_HARMONY_OS_AUDIOWRITER_H
-#define PRIVATE_FFMPEG_HARMONY_OS_AUDIOWRITER_H
+#ifndef FFAV_AudioWriter_hpp
+#define FFAV_AudioWriter_hpp
 
-#include "av/core/AudioEncoder.h"
-#include "av/core/AudioFifo.h"
-#include "av/core/AudioMuxer.h"
-#include "av/core/FilterGraph.h"
+#include "ff_types.hpp"
 #include <cstdint>
+#include <string>
 
 namespace FFAV {
+
+class AudioEncoder;
+class AudioFifo;
+class FilterGraph;
+class AudioMuxer;
 
 /**
  * @class AudioWriter
@@ -73,31 +76,31 @@ public:
     int close();
     
 private:
-    AudioEncoder* encoder { nullptr };
-    AudioFifo* fifo { nullptr };
-    FilterGraph* filter_graph { nullptr };
-    AudioMuxer* muxer { nullptr };
-    
-    AVSampleFormat in_sample_fmt;
-    int in_sample_rate;
-    int in_nb_channels;
-    AVChannelLayout in_ch_layout;
-    int64_t in_pts { 0 };
-    
-    AVSampleFormat out_sample_fmt; 
-    int out_sample_rate; 
-    int out_nb_channels; 
-    AVChannelLayout out_ch_layout;
-    int out_frame_size;
-    
-    AVFrame* filter_out_frame { nullptr };
-    AVFrame* fifo_out_frame { nullptr };
-    AVPacket* out_pkt { nullptr };
-    
-    int consumeAbufferSink();
-    int consumeFifo(bool eos);
+    AudioEncoder* _encoder { nullptr };
+    AudioFifo* _fifo { nullptr };
+    FilterGraph* _filter_graph { nullptr };
+    AudioMuxer* _muxer { nullptr };
+
+    AVSampleFormat _in_sample_fmt;
+    int _in_sample_rate;
+    int _in_nb_channels;
+    AVChannelLayout _in_ch_layout;
+    int64_t _in_pts { 0 };
+
+    AVSampleFormat _out_sample_fmt;
+    int _out_sample_rate;
+    int _out_nb_channels;
+    AVChannelLayout _out_ch_layout;
+    int _out_frame_size;
+
+    AVFrame *_in_frame { nullptr };
+    AVFrame* _out_filt_frame { nullptr };
+    AVFrame* _out_fifo_frame { nullptr };
+    AVPacket* _out_enc_pkt { nullptr };
+
+    bool _sent_encoder_eos { false };
 };
 
 }
 
-#endif //PRIVATE_FFMPEG_HARMONY_OS_AUDIOWRITER_H
+#endif //FFAV_AudioWriter_hpp
