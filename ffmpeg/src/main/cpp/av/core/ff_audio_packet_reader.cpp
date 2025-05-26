@@ -195,7 +195,7 @@ restart:
                     case State::Stopped: return true; // should read pkts or stop
                     case State::Reading: {
                         // check seek req
-                        if ( _req_seek_time.load() != AV_NOPTS_VALUE ) {
+                        if ( _req_seek_time.load() != AV_NOPTS_VALUE || _seeking_time != AV_NOPTS_VALUE ) {
                             return true;
                         }
                         
