@@ -3,6 +3,7 @@
 1. 目前移植了 fftools/ffmpeg, fftools/ffprobe, 可以在App中执行 [ffmpeg](#执行-ffmpeg-命令) 及 [ffprobe](#执行-ffprobe-命令) 相关的脚本命令, 支持并发;
 2. 基于 ffmpeg + AudioRenderer 封装的[音乐播放器](#音乐播放器);
 3. [音频实时编码及封装器](#音频实时编码及封装器), 可实时将传入的 PCM 音频数据进行编码并封装到指定的目标文件中;
+4. [注意事项](#注意事项);
 
 #### 安装
 ```shell
@@ -202,3 +203,26 @@ FFAudioWriter 该类用于接收原始 PCM 数据, 会将其编码为指定的�
       this.mAudioWriter?.closeSync();
       this.mAudioWriter = undefined;
   ```
+
+#### 注意事项
+
+该库包含了模拟器 x86_64 架构, 请在打包发布时排除该架构以减少包体积, 如下在工程级目录下`build-profile.json5`中, 找到相应的产品配置, 添加排除项;
+
+```json
+{
+  "app": {
+    "products": [
+      {
+        "name": "xxx",
+        "nativeLib": {
+          "filter": {
+            "excludes": [
+              "**/x86_64/*.so"
+            ]
+          }
+        }
+      }
+    ]
+  }
+}
+```
