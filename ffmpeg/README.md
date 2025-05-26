@@ -202,3 +202,26 @@ FFAudioWriter 该类用于接收原始 PCM 数据, 会将其编码为指定的�
       this.mAudioWriter?.closeSync();
       this.mAudioWriter = undefined;
   ```
+
+#### 注意事项
+
+该库包含了模拟器 x86_64 架构, 请在打包发布时排除该架构以减少包体积, 如下在工程级目录下`build-profile.json5`中, 找到相应的产品配置, 添加排除项;
+
+```json
+{
+  "app": {
+    "products": [
+      {
+        "name": "xxx",
+        "nativeLib": {
+          "filter": {
+            "excludes": [
+              "**/x86_64/*.so"
+            ]
+          }
+        }
+      }
+    ]
+  }
+}
+```
