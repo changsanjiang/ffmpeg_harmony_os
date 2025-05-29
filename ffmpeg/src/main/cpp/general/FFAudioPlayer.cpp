@@ -27,7 +27,6 @@
 //#define DEBUG
 
 #include "av/audio/PlayWhenReadyChangeReason.h"
-#include "extension/client_print.h"
 
 namespace FFAV {
 
@@ -37,7 +36,7 @@ namespace FFAV {
 
 napi_value FFAudioPlayer::Init(napi_env env, napi_value exports) {
 #ifdef DEBUG
-    client_print_message3("AAAA: FFAudioPlayer::Init");
+    ff_console_print3("AAAA: FFAudioPlayer::Init");
 #endif
     
     napi_property_descriptor properties[] = {
@@ -69,7 +68,7 @@ napi_value FFAudioPlayer::Init(napi_env env, napi_value exports) {
 
 void FFAudioPlayer::Destructor(napi_env env, void* nativeObject, [[maybe_unused]] void* finalize_hint) {
 #ifdef DEBUG
-    client_print_message3("AAAA: FFAudioPlayer::Destructor");
+    ff_console_print3("AAAA: FFAudioPlayer::Destructor");
 #endif
 
     delete reinterpret_cast<FFAudioPlayer*>(nativeObject);
@@ -77,7 +76,7 @@ void FFAudioPlayer::Destructor(napi_env env, void* nativeObject, [[maybe_unused]
 
 napi_value FFAudioPlayer::New(napi_env env, napi_callback_info info) {
 #ifdef DEBUG
-    client_print_message3("AAAA: FFAudioPlayer::New");
+    ff_console_print3("AAAA: FFAudioPlayer::New");
 #endif
 
     napi_value new_target;
@@ -126,7 +125,7 @@ static std::string NapiValueToString(napi_env env, napi_value value) {
 
 napi_value FFAudioPlayer::GetUrl(napi_env env, napi_callback_info info) {
 #ifdef DEBUG
-    client_print_message3("AAAA: FFAudioPlayer::GetUrl");
+    ff_console_print3("AAAA: FFAudioPlayer::GetUrl");
 #endif
 
     napi_value js_this;
@@ -147,7 +146,7 @@ napi_value FFAudioPlayer::GetUrl(napi_env env, napi_callback_info info) {
 
 napi_value FFAudioPlayer::SetUrl(napi_env env, napi_callback_info info) {
 #ifdef DEBUG
-    client_print_message3("AAAA: FFAudioPlayer::SetUrl");
+    ff_console_print3("AAAA: FFAudioPlayer::SetUrl");
 #endif
 
     size_t argc = 2;
@@ -580,7 +579,7 @@ FFAudioPlayer::FFAudioPlayer() = default;
 
 FFAudioPlayer::~FFAudioPlayer() {
 #ifdef DEBUG
-    client_print_message3("AAAA: FFAudioPlayer::~FFAudioPlayer");
+    ff_console_print3("AAAA: FFAudioPlayer::~FFAudioPlayer");
 #endif
 
     if ( js_func_duration_change_callback ) {
@@ -732,7 +731,7 @@ void FFAudioPlayer::onPlayerEvent(std::shared_ptr<FFAV::EventMessage> msg_ptr) {
 
 void FFAudioPlayer::onPlayWhenReadyChange(bool play_when_ready, PlayWhenReadyChangeReason reason) {
  #ifdef DEBUG
-    client_print_message3("AAAA: FFAudioPlayer::onPlayWhenReadyChange(%d)", play_when_ready);
+    ff_console_print3("AAAA: FFAudioPlayer::onPlayWhenReadyChange(%d)", play_when_ready);
 #endif
     this->play_when_ready.store(play_when_ready);
 
@@ -744,7 +743,7 @@ void FFAudioPlayer::onPlayWhenReadyChange(bool play_when_ready, PlayWhenReadyCha
 
 void FFAudioPlayer::onDurationChange(int64_t duration_ms) {
 #ifdef DEBUG
-    client_print_message3("AAAA: FFAudioPlayer::onDurationChange(%lld)", duration_ms);
+    ff_console_print3("AAAA: FFAudioPlayer::onDurationChange(%lld)", duration_ms);
 #endif
 
     this->duration_ms.store(duration_ms);
@@ -757,7 +756,7 @@ void FFAudioPlayer::onDurationChange(int64_t duration_ms) {
 
 void FFAudioPlayer::onCurrentTimeChange(int64_t current_time_ms) {
 #ifdef DEBUG
-    client_print_message3("AAAA: FFAudioPlayer::onCurrentTimeChange(%lld)", current_time_ms);
+    ff_console_print3("AAAA: FFAudioPlayer::onCurrentTimeChange(%lld)", current_time_ms);
 #endif
 
     this->current_time_ms.store(current_time_ms);
@@ -770,7 +769,7 @@ void FFAudioPlayer::onCurrentTimeChange(int64_t current_time_ms) {
 
 void FFAudioPlayer::onPlayableDurationChange(int64_t playable_duration_ms) {
 #ifdef DEBUG
-    client_print_message3("AAAA: FFAudioPlayer::onPlayableDurationChange(%lld)", playable_duration_ms);
+    ff_console_print3("AAAA: FFAudioPlayer::onPlayableDurationChange(%lld)", playable_duration_ms);
 #endif
 
     this->playable_duration_ms.store(playable_duration_ms);
@@ -783,7 +782,7 @@ void FFAudioPlayer::onPlayableDurationChange(int64_t playable_duration_ms) {
 
 void FFAudioPlayer::onErrorChange(FFAV::Error* error) {
 #ifdef DEBUG
-    client_print_message3("AAAA: FFAudioPlayer::onErrorChange(%ld, %s)", error->code, error->msg.c_str());
+    ff_console_print3("AAAA: FFAudioPlayer::onErrorChange(%ld, %s)", error->code, error->msg.c_str());
 #endif
     
     FFAV::Error* c_e = cur_error.load();

@@ -45,7 +45,7 @@ public:
     enum class FlushMode {
         /// 不清理;
         None,
-        /// 只清除pkt队列的缓存;
+        /// 只清除pkt相关的缓存(pkts + decoder + filterGraph);
         PacketOnly,
         /// 清除所有缓存(pkts + decoder + filterGraph + fifo);
         Full,

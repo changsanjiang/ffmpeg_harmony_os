@@ -15,11 +15,11 @@ extern "C" {
 
 namespace FFAV {
 
-class OHAudioStreamUtils {
-public:
-    static AVSampleFormat ohToAVSampleFormat(OH_AudioStream_SampleFormat oh_fmt);
-};
+namespace Conversion {
+    AVSampleFormat toAVFormat(OH_AudioStream_SampleFormat oh_fmt);
+    OH_AudioStream_SampleFormat toOHFormat(AVSampleFormat ff_fmt);
+} // namespace Conversion
 
-}
+} // namespace FFAV
 
 #endif //FFMPEG_HARMONY_OS_OHAUDIOSTREAMUTILS_H

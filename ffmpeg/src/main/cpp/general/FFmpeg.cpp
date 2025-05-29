@@ -24,7 +24,6 @@
 #include <cstdint>
 #include <cstdio>
 #include "FFAbortController.h"
-#include "extension/client_print.h"
 #include "extension/ff_ctx.h"
 
 EXTERN_C_START

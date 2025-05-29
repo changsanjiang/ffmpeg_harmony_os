@@ -139,6 +139,7 @@ int AudioTranscoder::enqueue(AVPacket * _Nullable packet, FlushMode mode) {
         case FlushMode::Full: {
             _packet_reached_eof = false;
             _transcoding_eof = false;
+            _should_drain_packets = false;
             
             _packet_queue->clear();
             _decoder->flush();
@@ -153,6 +154,7 @@ int AudioTranscoder::enqueue(AVPacket * _Nullable packet, FlushMode mode) {
         case FlushMode::PacketOnly: {
             _packet_reached_eof = false;
             _transcoding_eof = false;
+            _should_drain_packets = false;
             
             // 清理pkt相关的缓存;
             _packet_queue->clear();
@@ -227,15 +229,7 @@ int AudioTranscoder::tryTranscode(void * _Nonnull * _Nonnull out_data, int frame
                 int64_t frame_start_pts = filt_frame->pts;
                 int64_t frame_end_pts = frame_start_pts + filt_frame->nb_samples;
 
-                if ( aligned_pts != frame_start_pts ) {
-                    if ( frame_start_pts > aligned_pts ) {
-                        return AVERROR_BUG2;
-                    }
-
-                    if ( aligned_pts >= frame_end_pts ) {
-                        return 0;
-                    }
-
+                if ( frame_start_pts < aligned_pts ) {
                     // intersecting samples
                     int64_t skip_samples = aligned_pts - frame_start_pts;
                     int64_t remain_samples = frame_end_pts - aligned_pts;
@@ -276,6 +270,9 @@ int AudioTranscoder::tryTranscode(void * _Nonnull * _Nonnull out_data, int frame
             break;
         }
         else if ( ret == AVERROR(EAGAIN) ) {
+            // continue transcode
+        }
+        else if ( ret == AVERROR_INVALIDDATA ) {
             // continue transcode
         }
         else if ( ret < 0 ) {

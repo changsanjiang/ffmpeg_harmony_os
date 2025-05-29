@@ -26,7 +26,7 @@
 #include "napi/native_api.h"
 #include <string>
 #include <mutex>
-#include "av/core/ff_audio_writer.hpp"
+#include "av/ffwrap/ff_audio_writer.hpp"
 
 namespace FFAV {
 /**

@@ -25,7 +25,6 @@
 #include "cmdutils.h"
 #include "opt_common.h"
 
-#include "extension/client_print.h"
 #include "fftools/thread_variables.h"
 #include "libavutil/avassert.h"
 #include "libavutil/avstring.h"

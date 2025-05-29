@@ -24,7 +24,6 @@
  */
 
 #include "config.h"
-#include "extension/client_print.h"
 #include "extension/progress_callback.h"
 #include "fftools/opt_common.h"
 #include "fftools/thread_variables.h"

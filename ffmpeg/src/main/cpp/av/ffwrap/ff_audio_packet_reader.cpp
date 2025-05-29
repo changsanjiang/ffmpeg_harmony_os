@@ -36,7 +36,7 @@ AudioPacketReader::~AudioPacketReader() {
     reset();
 }
 
-void AudioPacketReader::prepare(const std::string &url, int64_t seek_position, const std::map<std::string, std::string>& http_options) {
+void AudioPacketReader::prepare(const std::string &url, const std::map<std::string, std::string>& http_options) {
     std::lock_guard<std::mutex> lock(_mtx);
     if ( _read_thread ) {
         throw_error("AudioPacketReader::prepare - AudioPacketReader is already prepared.");
@@ -44,11 +44,6 @@ void AudioPacketReader::prepare(const std::string &url, int64_t seek_position, c
     
     _url = url;
     _http_options = http_options;
-    
-    // 设置seek位置
-    if ( seek_position > 0 ) {
-        _req_seek_time.store(seek_position);
-    }
     
     // 启动读取线程
     _read_thread = std::make_unique<std::thread>(&AudioPacketReader::ReadLoop, this);
@@ -109,6 +104,7 @@ void AudioPacketReader::reset() {
     _seeking_time = AV_NOPTS_VALUE;
     _reached_eof = false;
     _packet_buffer_full.store(false);
+    _ff_err.store(0);
 }
 
 void AudioPacketReader::setPacketBufferFull(bool is_full) {
@@ -127,6 +123,10 @@ void AudioPacketReader::setReadPacketCallback(ReadPacketCallback callback) {
 
 void AudioPacketReader::setErrorCallback(AudioPacketReader::ErrorCallback callback) {
     _on_error_callback = callback;
+}
+
+int AudioPacketReader::getError() {
+    return _ff_err.load();
 }
 
 void AudioPacketReader::ReadLoop() {
@@ -149,6 +149,7 @@ void AudioPacketReader::ReadLoop() {
         }
         
         if ( ret < 0 ) {
+            _ff_err.store(ret);
             lock.unlock();
             if ( _on_error_callback ) _on_error_callback(this, ret); // notify error
             return;
@@ -157,6 +158,7 @@ void AudioPacketReader::ReadLoop() {
         AVStream* audio_stream = _media_reader->getBestStream(AVMEDIA_TYPE_AUDIO);
         if ( audio_stream == nullptr ) {
             ret = AVERROR_STREAM_NOT_FOUND;
+            _ff_err.store(ret);
             lock.unlock();
             if ( _on_error_callback ) _on_error_callback(this, ret); // notify error
             return;
@@ -238,6 +240,7 @@ restart:
             }
             // error
             else if ( ret < 0 ) {
+                _ff_err.store(ret);
                 error_occurred = true;
                 lock.unlock();
                 if ( _on_error_callback ) _on_error_callback(this, ret); // notify error
@@ -297,6 +300,7 @@ restart:
             // ret < 0;
             // read error
             else {
+                _ff_err.store(ret);
                 error_occurred = true;
                 lock.unlock();
                 if ( _on_error_callback ) _on_error_callback(this, ret); // notify error

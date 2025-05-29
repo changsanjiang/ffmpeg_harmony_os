@@ -31,7 +31,6 @@
 
 #include "config.h"
 #include "compat_va_copy.h"
-#include "extension/client_print.h"
 #include "extension/log_callback.h"
 #include "libavformat/avformat.h"
 #include "libswscale/swscale.h"

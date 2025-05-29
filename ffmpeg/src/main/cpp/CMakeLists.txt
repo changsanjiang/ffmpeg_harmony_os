@@ -9,10 +9,12 @@ if(DEFINED PACKAGE_FIND_FILE)
 endif()
 
 if(OHOS_ARCH STREQUAL "arm64-v8a")
-    add_definitions(-DFF_ARCH_ARM64_V8a)
+    add_definitions(-DFFAV_ARCH_ARM64_V8a)
 elseif(OHOS_ARCH STREQUAL "x86_64")
-    add_definitions(-DFF_ARCH_X86_64)
+    add_definitions(-DFFAV_ARCH_X86_64)
 endif()
+
+add_definitions(-DFFAV_PLATFORM_OHOS)
 
 file(GLOB FF_SRC_FILES "napi_init.cpp" "fftools/*.c" "extension/*.c" "extension/*.cpp" "av/*.cpp" "av/**/*.cpp" "general/*.cpp")
 add_library(ffmpeg SHARED ${FF_SRC_FILES})

@@ -25,12 +25,13 @@
 
 #include "av/audio/AudioPlaybackOptions.h"
 #include "av/audio/EventMessageQueue.h"
-#include "av/audio/AudioItem.h"
-#include "av/audio/AudioRenderer.h"
+#include "AudioRenderer.h"
 #include <stdint.h>
 #include <memory>
 
 namespace FFAV {
+
+class AudioItem;
 
 class AudioPlayer {
     public:
@@ -61,6 +62,7 @@ private:
     OH_AudioStream_Usage stream_usage;
     OH_AudioDevice_Type device_type { OH_AudioDevice_Type::AUDIO_DEVICE_TYPE_DEFAULT };
     
+    int64_t duration_ms { 0 };
     int output_nb_channels;
     int output_nb_bytes_per_sample;
     

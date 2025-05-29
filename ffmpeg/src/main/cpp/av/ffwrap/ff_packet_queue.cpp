@@ -44,7 +44,7 @@ void PacketQueue::push(AVPacket* _Nonnull packet) {
     
     int64_t duration = packet->duration;
     _duration += duration;
-    _total_size += pkt->size;
+    _total_size += packet->size;
     
     int64_t pts = packet->pts;
     if ( pts != AV_NOPTS_VALUE ) {

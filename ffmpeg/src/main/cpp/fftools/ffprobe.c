@@ -23,9 +23,9 @@
  * simple media prober based on the FFmpeg libraries
  */
 
+#include "av/utils/str_utils.h"
 #include "config.h"
 #include "extension/output_callback.h"
-#include "extension/utils.h"
 #include "fftools/fftools_common.h"
 #include "libavutil/ffversion.h"
 
@@ -620,10 +620,10 @@ static inline void writer_printf_avio(WriterContext *wctx, const char *fmt, ...)
     va_copy(ap_copy, ap);
     avio_vprintf(wctx->avio, fmt, ap);
 
-    char *str = native_string_create(fmt, ap_copy);
+    char *str = ff_cstr_create(fmt, ap_copy);
     if ( str ) {
         native_report_output(str); 
-        native_string_free(&str);
+        ff_cstr_free(&str);
     } 
     va_end(ap_copy);
     va_end(ap);
@@ -654,10 +654,10 @@ static inline void writer_printf_printf(WriterContext *wctx, const char *fmt, ..
     va_copy(ap_copy, ap);
     av_vlog(NULL, AV_LOG_INFO, fmt, ap);
 
-    char *str = native_string_create(fmt, ap_copy);
+    char *str = ff_cstr_create(fmt, ap_copy);
     if ( str ) {
         native_report_output(str); 
-        native_string_free(&str);
+        ff_cstr_free(&str);
     } 
     va_end(ap_copy);
     va_end(ap);

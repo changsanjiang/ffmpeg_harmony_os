@@ -21,20 +21,34 @@
 // please include "napi/native_api.h".
 
 #include "AudioPlayer.h"
-#include "extension/client_print.h"
+#include "av/ohutils/OHUtils.hpp"
 #include <cerrno>
 #include <stdint.h>
+#include "../ffwrap/ff_audio_item.hpp"
+#include "../utils/logger.h"
 
 namespace FFAV {
 
+const int OUTPUT_SAMPLE_RATE = 44100;
+const AVSampleFormat OUTPUT_SAMPLE_FORMAT = AV_SAMPLE_FMT_S16;
+const int OUTPUT_CHANNELS = 2;
+
 AudioPlayer::AudioPlayer(const std::string& url, const AudioPlaybackOptions& options): stream_usage(options.stream_usage) {
-    audio_item = new AudioItem(url, options.start_time_position_ms, options.http_options);
+    AudioItem::Options opts;
+    if ( options.start_time_position_ms > 0 ) {
+        opts.start_time_pos = av_rescale_q(options.start_time_position_ms, (AVRational){ 1, 1000 }, AV_TIME_BASE_Q);
+    }
+    opts.http_options = options.http_options;
+    opts.output_sample_rate = OUTPUT_SAMPLE_RATE;
+    opts.output_sample_format = OUTPUT_SAMPLE_FORMAT;
+    opts.output_channels = OUTPUT_CHANNELS;
+    audio_item = new AudioItem(url, opts);
     audio_renderer = new AudioRenderer();
 }
 
 AudioPlayer::~AudioPlayer() {
 #ifdef DEBUG
-    client_print_message3("AAAA: AudioPlayer::~AudioPlayer before");
+    ff_console_print3("AAAA: AudioPlayer::~AudioPlayer before");
 #endif
     {
         std::lock_guard<std::mutex> lock(mtx);
@@ -54,7 +68,7 @@ AudioPlayer::~AudioPlayer() {
     }
     
 #ifdef DEBUG
-    client_print_message3("AAAA: AudioPlayer::~AudioPlayer after");
+    ff_console_print3("AAAA: AudioPlayer::~AudioPlayer after");
 #endif
 }
 
@@ -80,7 +94,7 @@ void AudioPlayer::seek(int64_t time_pos_ms) {
     }
     
     flags.is_playback_ended = false;
-    audio_item->seek(time_pos_ms);
+    audio_item->seekTo(av_rescale_q(time_pos_ms, (AVRational){ 1, 1000 }, AV_TIME_BASE_Q));
 }
 
 void AudioPlayer::setVolume(float volume) {
@@ -134,13 +148,14 @@ void AudioPlayer::onPrepare() {
     }
     
     // init audio item
-    audio_item->setOnDurationChangeCallback([&](int64_t durationMs) {
-        onEvent(std::make_shared<DurationChangeEventMessage>(durationMs));
+    audio_item->setStreamReadyCallback([&](int64_t duration, AVRational time_base) {
+        duration_ms = av_rescale_q(duration, time_base, (AVRational){ 1, 1000 });
+        onEvent(std::make_shared<DurationChangeEventMessage>(duration_ms)); 
     });
-    audio_item->setOnPlayableDurationChangeCallback([&](int64_t playableDurationMs) {
-        onEvent(std::make_shared<PlayableDurationChangeEventMessage>(playableDurationMs));
+    audio_item->setBufferedTimeChangeCallback([&](int64_t buffered_time, AVRational time_base) {
+        onEvent(std::make_shared<PlayableDurationChangeEventMessage>(av_rescale_q(buffered_time, time_base, (AVRational){ 1, 1000 })));
     });
-    audio_item->setOnErrorCallback([&](int ff_err) {
+    audio_item->setErrorCallback([&](int ff_err) {
         onFFmpegError(ff_err);
     });
     
@@ -148,7 +163,7 @@ void AudioPlayer::onPrepare() {
     output_nb_bytes_per_sample = av_get_bytes_per_sample(audio_item->getOutputSampleFormat());
     
     // init audio renderer
-    OH_AudioStream_Result render_ret = audio_renderer->init(audio_item->getOutputOHSampleFormat(), audio_item->getOutputSampleRate(), audio_item->getOutputChannels(), stream_usage);
+    OH_AudioStream_Result render_ret = audio_renderer->init(FFAV::Conversion::toOHFormat(audio_item->getOutputSampleFormat()), audio_item->getOutputSampleRate(), audio_item->getOutputChannels(), stream_usage);
     if ( render_ret != AUDIOSTREAM_SUCCESS ) {
         onRenderError(render_ret);
         return;
@@ -187,7 +202,7 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* writ
     // playback ended
     if ( samples_read == 0 && eof ) {
         flags.is_playback_ended = true;
-        onEvent(std::make_shared<CurrentTimeEventMessage>(audio_item->getDurationMs()));
+        onEvent(std::make_shared<CurrentTimeEventMessage>(duration_ms));
         onPause(PlayWhenReadyChangeReason::PLAYBACK_ENDED);
     }
     // error
@@ -195,7 +210,7 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* writ
         onFFmpegError(ret);
     }
     else if ( samples_read > 0 ) {
-        onEvent(std::make_shared<CurrentTimeEventMessage>(pts));
+        onEvent(std::make_shared<CurrentTimeEventMessage>(av_rescale_q(pts, (AVRational){ 1, audio_item->getOutputSampleRate() }, (AVRational){ 1, 1000 })));
     }
     return AUDIO_DATA_CALLBACK_RESULT_VALID;
 }
@@ -290,13 +305,13 @@ void AudioPlayer::onOutputDeviceChangeCallback(OH_AudioStream_DeviceChangeReason
 }
 
 void AudioPlayer::onFFmpegError(int error) {
-    client_print_message3("AAAAA: onFFmpegError(%d), %s", error, av_err2str(error));
+    ff_console_print3("AAAAA: onFFmpegError(%d), %s", error, av_err2str(error));
     
     onError(Error::FFError(error));
 }
 
 void AudioPlayer::onRenderError(OH_AudioStream_Result error) {
-    client_print_message3("AAAAA: onRenderError(%d)", error);
+    ff_console_print3("AAAAA: onRenderError(%d)", error);
 
     onError(Error::RenderError(error));
 }

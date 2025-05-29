@@ -44,7 +44,7 @@ public:
     // normal: prepare => start => stop
     // error: reset => prepare(reprepare) => start => stop
     
-    void prepare(const std::string& url, int64_t seek_position = 0, const std::map<std::string, std::string>& http_options = {}); // 启动线程异步打开音频流, 等待启动读取数据包; seek_position in base q;
+    void prepare(const std::string& url, const std::map<std::string, std::string>& http_options = {}); // 启动线程异步打开音频流, 等待启动读取数据包; seek_position in base q;
     void start(); // 启动读取数据包;
     void seekTo(int64_t seek_position); // seek_position in base q;
     void stop(); // 停止读取数据包;
@@ -60,6 +60,8 @@ public:
     
     using ErrorCallback = std::function<void(AudioPacketReader *_Nonnull reader, int ff_err)>;
     void setErrorCallback(ErrorCallback callback); // 报错时的回调;
+    
+    int getError();
     
 private:
     void ReadLoop();
@@ -90,6 +92,7 @@ private:
     
     std::atomic<State> _state { State::Pending };
     std::atomic<bool> _packet_buffer_full { false };
+    std::atomic<int> _ff_err { 0 };
     bool _reached_eof { false };
 };
 
