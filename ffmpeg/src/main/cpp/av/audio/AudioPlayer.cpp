@@ -48,7 +48,7 @@ AudioPlayer::AudioPlayer(const std::string& url, const AudioPlaybackOptions& opt
 
 AudioPlayer::~AudioPlayer() {
 #ifdef DEBUG
-    ff_console_print3("AAAA: AudioPlayer::~AudioPlayer before");
+    ff_console_print("AAAA: AudioPlayer::~AudioPlayer before");
 #endif
     {
         std::lock_guard<std::mutex> lock(mtx);
@@ -68,7 +68,7 @@ AudioPlayer::~AudioPlayer() {
     }
     
 #ifdef DEBUG
-    ff_console_print3("AAAA: AudioPlayer::~AudioPlayer after");
+    ff_console_print("AAAA: AudioPlayer::~AudioPlayer after");
 #endif
 }
 
@@ -305,13 +305,13 @@ void AudioPlayer::onOutputDeviceChangeCallback(OH_AudioStream_DeviceChangeReason
 }
 
 void AudioPlayer::onFFmpegError(int error) {
-    ff_console_print3("AAAAA: onFFmpegError(%d), %s", error, av_err2str(error));
+    ff_console_print("AAAAA: onFFmpegError(%d), %s", error, av_err2str(error));
     
     onError(Error::FFError(error));
 }
 
 void AudioPlayer::onRenderError(OH_AudioStream_Result error) {
-    ff_console_print3("AAAAA: onRenderError(%d)", error);
+    ff_console_print("AAAAA: onRenderError(%d)", error);
 
     onError(Error::RenderError(error));
 }

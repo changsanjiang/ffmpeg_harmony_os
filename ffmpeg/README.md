@@ -16,7 +16,7 @@ ohpm i @sj/ffmpeg
 ```json
 {
   "dependencies": {
-    "@sj/ffmpeg": "^1.2.3"
+    "@sj/ffmpeg": "^1.2.4"
   }
 }
 ```

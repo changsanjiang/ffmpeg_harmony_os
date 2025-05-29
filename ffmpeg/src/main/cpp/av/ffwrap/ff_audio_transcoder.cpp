@@ -228,6 +228,9 @@ int AudioTranscoder::tryTranscode(void * _Nonnull * _Nonnull out_data, int frame
                 int64_t aligned_pts = _fifo->getEndPts();
                 int64_t frame_start_pts = filt_frame->pts;
                 int64_t frame_end_pts = frame_start_pts + filt_frame->nb_samples;
+                if ( aligned_pts >= frame_end_pts ) {
+                    return 0;
+                }
 
                 if ( frame_start_pts < aligned_pts ) {
                     // intersecting samples

@@ -13,9 +13,8 @@
 extern "C" {
 #endif
 
-void ff_console_print(const char *msg);
-void ff_console_print2(const char *fmt, va_list args);
-void ff_console_print3(const char *format, ...);
+void ff_console_print(const char *fmt, ...);
+void ff_console_vprint(const char *fmt, va_list args);
 
 #ifdef __cplusplus
 }
