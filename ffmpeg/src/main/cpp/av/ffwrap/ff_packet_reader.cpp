@@ -15,60 +15,60 @@
     along with @sj/ffmpeg. If not, see <http://www.gnu.org/licenses/>.
  * */
 //
-//  AudioPacketReader.cpp
+//  PacketReader.cpp
 //  LWZFFmpegLib
 //
 //  Created by sj on 2025/5/16.
 //
 
-#include "ff_audio_packet_reader.hpp"
+#include "ff_packet_reader.hpp"
 #include "ff_media_reader.hpp"
 #include "ff_includes.hpp"
 #include "ff_throw.hpp"
 
 namespace FFAV {
 
-AudioPacketReader::AudioPacketReader() {
+PacketReader::PacketReader() {
     
 }
 
-AudioPacketReader::~AudioPacketReader() {
+PacketReader::~PacketReader() {
     reset();
 }
 
-void AudioPacketReader::prepare(const std::string &url, const std::map<std::string, std::string>& http_options) {
+void PacketReader::prepare(const std::string &url, const std::map<std::string, std::string>& http_options) {
     std::lock_guard<std::mutex> lock(_mtx);
     if ( _read_thread ) {
-        throw_error("AudioPacketReader::prepare - AudioPacketReader is already prepared.");
+        throw_error("PacketReader::prepare - PacketReader is already prepared.");
     }
     
     _url = url;
     _http_options = http_options;
     
     // 启动读取线程
-    _read_thread = std::make_unique<std::thread>(&AudioPacketReader::ReadLoop, this);
+    _read_thread = std::make_unique<std::thread>(&PacketReader::ReadLoop, this);
 }
 
-void AudioPacketReader::start() {
+void PacketReader::start() {
     // 设置标记并通知读取线程
     _state.store(State::Reading);
     _cv.notify_all();
 }
 
-void AudioPacketReader::seekTo(int64_t seek_position) {
+void PacketReader::seekTo(int64_t seek_position) {
     // 设置seek位置并通知读取线程
     if ( _req_seek_time.exchange(seek_position) != seek_position ) {
         _cv.notify_all();
     }
 }
 
-void AudioPacketReader::stop() {
+void PacketReader::stop() {
     // 设置标记并通知读取线程停止读取
     _state.store(State::Stopped);
     _cv.notify_all();
 }
 
-void AudioPacketReader::reset() {
+void PacketReader::reset() {
     // 停止读取
     stop();
     
@@ -85,7 +85,7 @@ void AudioPacketReader::reset() {
     }
     
     // 等待线程退出
-    if ( read_thread && read_thread->joinable() ) {
+    if ( read_thread && read_thread->get_id() != std::this_thread::get_id() && read_thread->joinable() ) {
         read_thread->join();
     }
     
@@ -99,7 +99,6 @@ void AudioPacketReader::reset() {
     // 重置所有状态
     _url.clear();
     _state.store(State::Pending);
-    _stream_index = AVERROR_STREAM_NOT_FOUND;
     _req_seek_time.store(AV_NOPTS_VALUE);
     _seeking_time = AV_NOPTS_VALUE;
     _reached_eof = false;
@@ -107,29 +106,49 @@ void AudioPacketReader::reset() {
     _ff_err.store(0);
 }
 
-void AudioPacketReader::setPacketBufferFull(bool is_full) {
+void PacketReader::setPacketBufferFull(bool is_full) {
     if ( _packet_buffer_full.exchange(is_full) != is_full ) {
         _cv.notify_all();
     }
 }
 
-void AudioPacketReader::setAudioStreamReadyCallback(AudioPacketReader::StreamReadyCallback callback) {
+void PacketReader::setStreamReadyCallback(PacketReader::StreamReadyCallback callback) {
     _on_audio_stream_ready_callback = callback;
 }
 
-void AudioPacketReader::setReadPacketCallback(ReadPacketCallback callback) {
+void PacketReader::setReadPacketCallback(ReadPacketCallback callback) {
     _on_read_packet_callback = callback;
 }
 
-void AudioPacketReader::setErrorCallback(AudioPacketReader::ErrorCallback callback) {
+void PacketReader::setErrorCallback(PacketReader::ErrorCallback callback) {
     _on_error_callback = callback;
 }
 
-int AudioPacketReader::getError() {
+int PacketReader::getError() {
     return _ff_err.load();
 }
 
-void AudioPacketReader::ReadLoop() {
+StreamProvider* PacketReader::getStreamProvider() {
+    return _media_reader->getStreamProvider();
+}
+
+int PacketReader::getStreamCount() {
+    return _media_reader->getStreamCount();
+}
+
+AVStream** PacketReader::getStreams() {
+    return _media_reader->getStreams();
+}
+
+AVStream* PacketReader::getBestStream(AVMediaType mediaType) {
+    return _media_reader->getBestStream(mediaType);
+}
+
+AVStream* PacketReader::getFirstStream(AVMediaType mediaType) {
+    return _media_reader->getFirstStream(mediaType);
+}
+
+void PacketReader::ReadLoop() {
     int ret = 0;
     {
         std::unique_lock<std::mutex> lock(_mtx);
@@ -164,11 +183,9 @@ void AudioPacketReader::ReadLoop() {
             return;
         }
         
-        _stream_index = audio_stream->index;
-
         // open and init successful
         lock.unlock();
-        if ( _on_audio_stream_ready_callback ) _on_audio_stream_ready_callback(this, audio_stream); // notify ready
+        if ( _on_audio_stream_ready_callback ) _on_audio_stream_ready_callback(this); // notify ready
     }
     
     // handle seek & read pkts
@@ -275,15 +292,13 @@ restart:
             }
             // read success
             else if ( ret == 0 ) {
-                if ( pkt->stream_index == _stream_index ) {
-                    bool should_flush = _seeking_time != AV_NOPTS_VALUE;
-                    if ( should_flush ) {
-                        _seeking_time = AV_NOPTS_VALUE;
-                    }
-                    
-                    lock.unlock();
-                    if ( _on_read_packet_callback ) _on_read_packet_callback(this, pkt, should_flush); // notify read new packet
+                bool should_flush = _seeking_time != AV_NOPTS_VALUE;
+                if ( should_flush ) {
+                    _seeking_time = AV_NOPTS_VALUE;
                 }
+                
+                lock.unlock();
+                if ( _on_read_packet_callback ) _on_read_packet_callback(this, pkt, should_flush); // notify read new packet
             }
             // read eof
             else if ( ret == AVERROR_EOF ) {
@@ -317,12 +332,12 @@ exit_thread:
 }
 
 /// 需要seek时返回true;
-bool AudioPacketReader::checkSeekReq() {
+bool PacketReader::checkSeekReq() {
     int64_t req = _req_seek_time.load();
     if ( req != AV_NOPTS_VALUE ) {
         // 当 req == seeking 时 (重复请求) 不需要再次 seek 了;
         if ( req == _seeking_time ) {
-            _req_seek_time.exchange(AV_NOPTS_VALUE);
+            _req_seek_time.store(AV_NOPTS_VALUE);
             return false;
         }
         return true;

@@ -25,7 +25,7 @@
 
 #include "av/utils/str_utils.h"
 #include "config.h"
-#include "extension/output_callback.h"
+#include "interaction/output_callback.h"
 #include "fftools/fftools_common.h"
 #include "libavutil/ffversion.h"
 

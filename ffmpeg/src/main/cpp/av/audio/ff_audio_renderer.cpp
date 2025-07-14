@@ -20,7 +20,7 @@
 // Node APIs are not fully supported. To solve the compilation error of the interface cannot be found,
 // please include "napi/native_api.h".
 
-#include "AudioRenderer.h"
+#include "ff_audio_renderer.hpp"
 #include <cstdint>
 #include <ohaudio/native_audiorenderer.h>
 #include <ohaudio/native_audiostreambuilder.h>
@@ -179,10 +179,10 @@ OH_AudioStream_Result AudioRenderer::pause() {
 }
 
 OH_AudioStream_Result AudioRenderer::stop() {
-    if ( audio_renderer == nullptr ) {
-        throw std::runtime_error("AudioRenderer is not initialized");
+    if ( audio_renderer != nullptr ) {
+        return OH_AudioRenderer_Stop(audio_renderer);
     }
-    return OH_AudioRenderer_Stop(audio_renderer);
+    return AUDIOSTREAM_SUCCESS;
 }
 
 OH_AudioStream_Result AudioRenderer::flush() {

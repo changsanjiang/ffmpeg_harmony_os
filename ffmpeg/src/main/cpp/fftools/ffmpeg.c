@@ -24,7 +24,7 @@
  */
 
 #include "config.h"
-#include "extension/progress_callback.h"
+#include "interaction/progress_callback.h"
 #include "fftools/opt_common.h"
 #include "fftools/thread_variables.h"
 #include <ctype.h>

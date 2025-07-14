@@ -20,23 +20,24 @@
 // Node APIs are not fully supported. To solve the compilation error of the interface cannot be found,
 // please include "napi/native_api.h".
 
-#ifndef FFMPEG_HARMONY_OS_AUDIOPLAYER_H
-#define FFMPEG_HARMONY_OS_AUDIOPLAYER_H
+#ifndef FFAV_AudioPlayer_hpp
+#define FFAV_AudioPlayer_hpp
 
-#include "av/audio/AudioPlaybackOptions.h"
-#include "av/audio/EventMessageQueue.h"
-#include "AudioRenderer.h"
 #include <stdint.h>
 #include <memory>
+#include "EventMessageQueue.h"
+#include "ff_audio_renderer.hpp"
+#include "ff_audio_const.hpp"
+#include "av/ffwrap/ff_audio_item.hpp"
 
 namespace FFAV {
 
 class AudioItem;
 
 class AudioPlayer {
-    public:
+public:
     AudioPlayer(const std::string& url, const AudioPlaybackOptions& options);
-    ~AudioPlayer();
+    virtual ~AudioPlayer();
 
     void prepare();
     void play();
@@ -52,36 +53,14 @@ class AudioPlayer {
     
     void setEventCallback(EventMessageQueue::EventCallback callback);
     
-private:
-    AudioItem* audio_item { nullptr };
-    AudioRenderer* audio_renderer { nullptr };
+    int64_t getDurationPlayed() const; // 返回毫秒;
     
-    float volume { 1 };
-    float speed { 1 };
-    
-    OH_AudioStream_Usage stream_usage;
-    OH_AudioDevice_Type device_type { OH_AudioDevice_Type::AUDIO_DEVICE_TYPE_DEFAULT };
-    
-    int64_t duration_ms { 0 };
-    int output_nb_channels;
-    int output_nb_bytes_per_sample;
-    
-    PlayWhenReadyChangeReason play_when_ready_change_reason = USER_REQUEST;
-    
-    EventMessageQueue* event_msg_queue = new EventMessageQueue();
-    
+protected:
+    virtual AudioItem* onCreateAudioItem(const std::string& url, const AudioItem::Options& options);
+    AudioItem* getAudioItem();
     std::mutex mtx;
     
-    struct {
-        unsigned released :1;
-        unsigned prepared :1;
-        unsigned has_error :1;
-        
-        unsigned play_when_ready :1;
-        unsigned is_renderer_running :1;
-        unsigned is_playback_ended :1;
-    } flags = { 0 };
-    
+private:
     void onFFmpegError(int ff_err);
     void onRenderError(OH_AudioStream_Result render_err);
     void onError(std::shared_ptr<Error> error);
@@ -98,8 +77,42 @@ private:
     void onOutputDeviceChangeCallback(OH_AudioStream_DeviceChangeReason reason);
     
     void startRenderer();
+    
+private:
+    std::string _url;
+    AudioPlaybackOptions _options;
+    
+    int _output_sample_rate; 
+    AVSampleFormat _output_sample_format;
+    int _output_channels;
+    int _output_bytes_per_sample;
+    
+    AudioItem* _audio_item { nullptr };
+    AudioRenderer* _audio_renderer { nullptr };
+    
+    float _volume { 1 };
+    float _speed { 1 };
+    
+    OH_AudioDevice_Type _device_type { OH_AudioDevice_Type::AUDIO_DEVICE_TYPE_DEFAULT };
+    
+    int64_t _duration_ms { 0 };
+    std::atomic<int64_t> _duration_played { 0 }; // accumulated play time: 累计播放的时间，in output time base;
+    
+    PlayWhenReadyChangeReason _play_when_ready_change_reason = USER_REQUEST;
+    
+    EventMessageQueue* _event_msg_queue = new EventMessageQueue();
+    
+    struct {
+        unsigned released :1;
+        unsigned prepared :1;
+        unsigned has_error :1;
+        
+        unsigned play_when_ready :1;
+        unsigned is_renderer_running :1;
+        unsigned is_playback_ended :1;
+    } _flags = { 0 };
 };
 
 }
 
-#endif //FFMPEG_HARMONY_OS_AUDIOPLAYER_H
+#endif //FFAV_AudioPlayer_hpp

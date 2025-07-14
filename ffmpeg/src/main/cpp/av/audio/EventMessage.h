@@ -23,9 +23,9 @@
 #ifndef FFMPEGPROJ_EVENTMESSAGE_H
 #define FFMPEGPROJ_EVENTMESSAGE_H
 
-#include "PlayWhenReadyChangeReason.h"
 #include "Error.h"
 #include <cstdint>
+#include "ff_audio_const.hpp"
 
 namespace FFAV {
 enum EventType {

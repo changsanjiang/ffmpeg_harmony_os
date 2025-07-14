@@ -23,11 +23,10 @@
 #ifndef FFMPEG_HARMONY_OS_FFAUDIOPLAYER_H
 #define FFMPEG_HARMONY_OS_FFAUDIOPLAYER_H
 
-#include "av/audio/PlayWhenReadyChangeReason.h"
 #include "napi/native_api.h"
 #include <stdint.h>
 #include <string>
-#include "av/audio/AudioPlayer.h"
+#include "av/audio/ff_audio_player.hpp"
 
 namespace FFAV {
 
@@ -55,6 +54,7 @@ private:
     static napi_value GetCurrentTime(napi_env env, napi_callback_info info);
     static napi_value GetDuration(napi_env env, napi_callback_info info);
     static napi_value GetPlayableDuration(napi_env env, napi_callback_info info);
+    static napi_value GetDurationPlayed(napi_env env, napi_callback_info info);
     static napi_value GetError(napi_env env, napi_callback_info info);
     
     // events: playWhenReadyChange, durationChange, currentTimeChange, playableDurationChange, errorChange
@@ -83,6 +83,7 @@ private:
     napi_threadsafe_function js_func_playable_duration_change_callback = nullptr;
     napi_threadsafe_function js_func_error_change_callback = nullptr;
     
+    void setUrl(const std::string& url, const FFAV::AudioPlaybackOptions& options);
     bool createPlayer();
     void prepare();
     void play();
@@ -90,10 +91,13 @@ private:
     // 停止播放, 当前的播放资源及状态将会被清除和重置; error 也将被重置;
     void stop();
     void seek(int64_t time_ms);
+    void releasePlayer();
     
     void setVolume(float volume);
     void setSpeed(float speed);
     void setDeviceType(int32_t device_type);
+    
+    int64_t getDurationPlayed();
 
     void onPlayerEvent(std::shared_ptr<FFAV::EventMessage> msg);
     void onPlayWhenReadyChange(bool play_when_ready, PlayWhenReadyChangeReason reason);

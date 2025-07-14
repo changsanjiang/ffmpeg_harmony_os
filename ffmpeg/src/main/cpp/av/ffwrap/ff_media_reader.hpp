@@ -26,8 +26,11 @@
 #include <string>
 #include <map>
 #include "ff_types.hpp"
+#include "ff_stream_provider.hpp"
 
 namespace FFAV {
+
+class StreamProviderImpl;
 
 /** 用于读取未解码的数据包 */
 class MediaReader {
@@ -38,14 +41,15 @@ public:
     // 打开媒体文件
     int open(const std::string& url, const std::map<std::string, std::string>& http_options = {});
     
+    // 请在媒体文件打开成功后获取;
     // 获取流的数量
     unsigned int getStreamCount();
 
     // 获取指定流的 AVStream
     AVStream* _Nullable getStream(int stream_index);    
     AVStream* _Nullable getBestStream(AVMediaType type);
+    AVStream* _Nullable getFirstStream(AVMediaType type);
     AVStream*_Nonnull* _Nullable getStreams();
-
     /* av_find_best_stream
      *
      * @return  the non-negative stream number in case of success,
@@ -54,6 +58,9 @@ public:
      *          AVERROR_DECODER_NOT_FOUND if streams were found but no decoder
     */
     int findBestStream(AVMediaType type);
+    
+    // 请在媒体文件打开成功后获取;
+    StreamProvider* getStreamProvider();
     
     // 读取下一帧
     int readPacket(AVPacket* _Nonnull pkt);
@@ -78,6 +85,7 @@ private:
     
 private:
     AVFormatContext* _Nullable _fmt_ctx = nullptr;     // AVFormatContext 用于管理媒体文件
+    StreamProviderImpl* _Nullable _stream_provider = nullptr;
     std::atomic<bool> _interrupt_requested { false };  // 请求读取中断
 };
 

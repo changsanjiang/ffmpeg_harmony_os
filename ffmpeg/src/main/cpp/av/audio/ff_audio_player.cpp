@@ -20,12 +20,12 @@
 // Node APIs are not fully supported. To solve the compilation error of the interface cannot be found,
 // please include "napi/native_api.h".
 
-#include "AudioPlayer.h"
-#include "av/ohutils/OHUtils.hpp"
+#include "ff_audio_player.hpp"
 #include <cerrno>
 #include <stdint.h>
-#include "../ffwrap/ff_audio_item.hpp"
-#include "../utils/logger.h"
+#include "av/ohutils/OHUtils.hpp"
+#include "av/utils/logger.h"
+#include "av/ffwrap/ff_audio_item.hpp"
 
 namespace FFAV {
 
@@ -33,17 +33,15 @@ const int OUTPUT_SAMPLE_RATE = 44100;
 const AVSampleFormat OUTPUT_SAMPLE_FORMAT = AV_SAMPLE_FMT_S16;
 const int OUTPUT_CHANNELS = 2;
 
-AudioPlayer::AudioPlayer(const std::string& url, const AudioPlaybackOptions& options): stream_usage(options.stream_usage) {
-    AudioItem::Options opts;
-    if ( options.start_time_position_ms > 0 ) {
-        opts.start_time_pos = av_rescale_q(options.start_time_position_ms, (AVRational){ 1, 1000 }, AV_TIME_BASE_Q);
-    }
-    opts.http_options = options.http_options;
-    opts.output_sample_rate = OUTPUT_SAMPLE_RATE;
-    opts.output_sample_format = OUTPUT_SAMPLE_FORMAT;
-    opts.output_channels = OUTPUT_CHANNELS;
-    audio_item = new AudioItem(url, opts);
-    audio_renderer = new AudioRenderer();
+AudioPlayer::AudioPlayer(const std::string& url, const AudioPlaybackOptions& options): 
+    _url(url), 
+    _options(options),
+    _output_sample_rate(OUTPUT_SAMPLE_RATE),
+    _output_sample_format(OUTPUT_SAMPLE_FORMAT),
+    _output_channels(OUTPUT_CHANNELS),
+    _output_bytes_per_sample(av_get_bytes_per_sample(OUTPUT_SAMPLE_FORMAT))
+{
+
 }
 
 AudioPlayer::~AudioPlayer() {
@@ -52,19 +50,20 @@ AudioPlayer::~AudioPlayer() {
 #endif
     {
         std::lock_guard<std::mutex> lock(mtx);
-        flags.released = true;
+        _flags.released = true;
     }
     
-    event_msg_queue->stop();
-    delete event_msg_queue;
+    _event_msg_queue->stop();
+    delete _event_msg_queue;
     
-    if ( audio_renderer ) {
-        audio_renderer->stop();
-        delete audio_renderer;
+    if ( _audio_renderer ) {
+        _audio_renderer->stop();
+        delete _audio_renderer;
     }
 
-    if ( audio_item ) {
-        delete audio_item;
+    if ( _audio_item ) {
+        delete _audio_item;
+        _audio_item = nullptr;
     }
     
 #ifdef DEBUG
@@ -89,120 +88,132 @@ void AudioPlayer::pause() {
 
 void AudioPlayer::seek(int64_t time_pos_ms) {
     std::unique_lock<std::mutex> lock(mtx);
-    if ( !flags.prepared || flags.has_error || flags.released ) {
+    if ( !_flags.prepared || _flags.has_error || _flags.released ) {
         return;
     }
     
-    flags.is_playback_ended = false;
-    audio_item->seekTo(av_rescale_q(time_pos_ms, (AVRational){ 1, 1000 }, AV_TIME_BASE_Q));
+    _flags.is_playback_ended = false;
+    _audio_item->seekTo(av_rescale_q(time_pos_ms, (AVRational){ 1, 1000 }, AV_TIME_BASE_Q));
 }
 
 void AudioPlayer::setVolume(float volume) {
     std::lock_guard<std::mutex> lock(mtx);
-    if ( flags.has_error || flags.released ) {
+    if ( _flags.has_error || _flags.released ) {
         return;
     }
     
     if ( volume < 0.0f ) volume = 0.0f;
     else if ( volume > 1.0f ) volume = 1.0f;
     
-    this->volume = volume;
+    this->_volume = volume;
     
-    if ( flags.prepared ) {
-        audio_renderer->setVolume(volume);
+    if ( _flags.prepared ) {
+        _audio_renderer->setVolume(volume);
     }
 }
 
 void AudioPlayer::setSpeed(float speed) {
     std::lock_guard<std::mutex> lock(mtx);
-    if ( flags.has_error || flags.released ) {
+    if ( _flags.has_error || _flags.released ) {
         return;
     }
     
     if ( speed < 0.25f ) speed = 0.25f;
     else if ( speed > 4.0f ) speed = 4.0f;
     
-    this->speed = speed;
+    this->_speed = speed;
     
-    if ( flags.prepared ) {
-        audio_renderer->setSpeed(speed);
+    if ( _flags.prepared ) {
+        _audio_renderer->setSpeed(speed);
     }
 }
 
 void AudioPlayer::setDefaultOutputDevice(OH_AudioDevice_Type device_type) {
     std::lock_guard<std::mutex> lock(mtx);
-    this->device_type = device_type;
+    this->_device_type = device_type;
     
-    if ( flags.prepared ) {
-        audio_renderer->setDefaultOutputDevice(device_type);
+    if ( _flags.prepared ) {
+        _audio_renderer->setDefaultOutputDevice(device_type);
     }
 }
 
 void AudioPlayer::setEventCallback(EventMessageQueue::EventCallback callback) {
-    event_msg_queue->setEventCallback(callback);
+    _event_msg_queue->setEventCallback(callback);
+}
+
+int64_t AudioPlayer::getDurationPlayed() const  {
+    auto duration = _duration_played.load(std::__n1::memory_order_relaxed);
+    return duration > 0 ? av_rescale_q(duration, (AVRational){ 1, _output_sample_rate }, (AVRational){ 1, 1000 }) : 0;
 }
 
 void AudioPlayer::onPrepare() {
-    if ( flags.prepared || flags.has_error || flags.released ) {
+    if ( _flags.prepared || _flags.has_error || _flags.released ) {
         return;
     }
     
-    // init audio item
-    audio_item->setStreamReadyCallback([&](int64_t duration, AVRational time_base) {
-        duration_ms = av_rescale_q(duration, time_base, (AVRational){ 1, 1000 });
-        onEvent(std::make_shared<DurationChangeEventMessage>(duration_ms)); 
-    });
-    audio_item->setBufferedTimeChangeCallback([&](int64_t buffered_time, AVRational time_base) {
-        onEvent(std::make_shared<PlayableDurationChangeEventMessage>(av_rescale_q(buffered_time, time_base, (AVRational){ 1, 1000 })));
-    });
-    audio_item->setErrorCallback([&](int ff_err) {
-        onFFmpegError(ff_err);
-    });
-    
-    output_nb_channels = audio_item->getOutputChannels();
-    output_nb_bytes_per_sample = av_get_bytes_per_sample(audio_item->getOutputSampleFormat());
-    
     // init audio renderer
-    OH_AudioStream_Result render_ret = audio_renderer->init(FFAV::Conversion::toOHFormat(audio_item->getOutputSampleFormat()), audio_item->getOutputSampleRate(), audio_item->getOutputChannels(), stream_usage);
+    _audio_renderer = new AudioRenderer();
+    OH_AudioStream_Result render_ret = _audio_renderer->init(FFAV::Conversion::toOHFormat(_output_sample_format), _output_sample_rate, _output_channels, _options.stream_usage);
     if ( render_ret != AUDIOSTREAM_SUCCESS ) {
         onRenderError(render_ret);
         return;
     }
     
-    if ( volume != 1 ) audio_renderer->setVolume(volume);
-    if ( speed != 1 ) audio_renderer->setSpeed(speed);
-    if ( device_type != OH_AudioDevice_Type::AUDIO_DEVICE_TYPE_DEFAULT ) audio_renderer->setDefaultOutputDevice(device_type);
+    if ( _volume != 1 ) _audio_renderer->setVolume(_volume);
+    if ( _speed != 1 ) _audio_renderer->setSpeed(_speed);
+    if ( _device_type != OH_AudioDevice_Type::AUDIO_DEVICE_TYPE_DEFAULT ) _audio_renderer->setDefaultOutputDevice(_device_type);
     
     // set callbacks
-    audio_renderer->setWriteDataCallback(std::bind(&AudioPlayer::onRendererWriteDataCallback, this, std::placeholders::_1, std::placeholders::_2));
-    audio_renderer->setInterruptEventCallback(std::bind(&AudioPlayer::onRendererInterruptEventCallback, this, std::placeholders::_1, std::placeholders::_2));
-    audio_renderer->setErrorCallback(std::bind(&AudioPlayer::onRendererErrorCallback, this, std::placeholders::_1));
-    audio_renderer->setOutputDeviceChangeCallback(std::bind(&AudioPlayer::onOutputDeviceChangeCallback, this, std::placeholders::_1));
+    _audio_renderer->setWriteDataCallback(std::bind(&AudioPlayer::onRendererWriteDataCallback, this, std::placeholders::_1, std::placeholders::_2));
+    _audio_renderer->setInterruptEventCallback(std::bind(&AudioPlayer::onRendererInterruptEventCallback, this, std::placeholders::_1, std::placeholders::_2));
+    _audio_renderer->setErrorCallback(std::bind(&AudioPlayer::onRendererErrorCallback, this, std::placeholders::_1));
+    _audio_renderer->setOutputDeviceChangeCallback(std::bind(&AudioPlayer::onOutputDeviceChangeCallback, this, std::placeholders::_1));
 
-    // prepare
-    audio_item->prepare();
+    // init audio item & prepare
+    AudioItem::Options item_options;
+    item_options.http_options = _options.http_options;
+    item_options.output_sample_rate = _output_sample_rate;
+    item_options.output_sample_format = _output_sample_format;
+    item_options.output_channels = _output_channels;
+    if ( _options.start_time_position_ms > 0 ) {
+        item_options.start_time_pos = av_rescale_q(_options.start_time_position_ms, (AVRational){ 1, 1000 }, AV_TIME_BASE_Q);
+    }
     
-    flags.prepared = true;
+    _audio_item = onCreateAudioItem(_url, item_options);
+    _audio_item->setStreamReadyCallback([&](int64_t duration, AVRational time_base) {
+        _duration_ms = av_rescale_q(duration, time_base, (AVRational){ 1, 1000 });
+        onEvent(std::make_shared<DurationChangeEventMessage>(_duration_ms)); 
+    });
+    _audio_item->setBufferedTimeChangeCallback([&](int64_t buffered_time, AVRational time_base) {
+        onEvent(std::make_shared<PlayableDurationChangeEventMessage>(av_rescale_q(buffered_time, time_base, (AVRational){ 1, 1000 })));
+    });
+    _audio_item->setErrorCallback([&](int ff_err) {
+        onFFmpegError(ff_err);
+    });
+    // prepare
+    _audio_item->prepare();
+    
+    _flags.prepared = true;
 }
 
 OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* write_buffer, int write_buffer_size_in_bytes) {
     std::unique_lock<std::mutex> lock(mtx);
     
-    int capacity = write_buffer_size_in_bytes / output_nb_bytes_per_sample / output_nb_channels;
+    int capacity = write_buffer_size_in_bytes / _output_bytes_per_sample / _output_channels;
     int64_t pts = 0;
     bool eof = false;
-    int ret = audio_item->tryTranscode(&write_buffer, capacity, &pts, &eof);
+    int ret = _flags.prepared ? _audio_item->tryTranscode(&write_buffer, capacity, &pts, &eof) : 0;
     
     int samples_read = ret > 0 ? ret : 0;
     if ( samples_read < capacity ) {
-        int bytes_read = samples_read * output_nb_channels * output_nb_bytes_per_sample;
+        int bytes_read = samples_read * _output_channels * _output_bytes_per_sample;
         memset(static_cast<uint8_t*>(write_buffer) + bytes_read, 0, write_buffer_size_in_bytes - bytes_read);
     }
     
     // playback ended
     if ( samples_read == 0 && eof ) {
-        flags.is_playback_ended = true;
-        onEvent(std::make_shared<CurrentTimeEventMessage>(duration_ms));
+        _flags.is_playback_ended = true;
+        onEvent(std::make_shared<CurrentTimeEventMessage>(_duration_ms));
         onPause(PlayWhenReadyChangeReason::PLAYBACK_ENDED);
     }
     // error
@@ -210,7 +221,10 @@ OH_AudioData_Callback_Result AudioPlayer::onRendererWriteDataCallback(void* writ
         onFFmpegError(ret);
     }
     else if ( samples_read > 0 ) {
-        onEvent(std::make_shared<CurrentTimeEventMessage>(av_rescale_q(pts, (AVRational){ 1, audio_item->getOutputSampleRate() }, (AVRational){ 1, 1000 })));
+        auto pts_ms = av_rescale_q(pts, (AVRational){ 1, _output_sample_rate }, (AVRational){ 1, 1000 });
+        auto cur_ms = std::min(pts_ms, _duration_ms);
+        _duration_played.fetch_add(samples_read);
+        onEvent(std::make_shared<CurrentTimeEventMessage>(cur_ms));
     }
     return AUDIO_DATA_CALLBACK_RESULT_VALID;
 }
@@ -267,7 +281,7 @@ void AudioPlayer::onRendererInterruptEventCallback(OH_AudioInterrupt_ForceType t
                 // 若应用此时不想继续播放，可以忽略此音频焦点事件，不进行处理即可
                 // 继续播放，此处主动执行start()，以标识符变量started记录start()的执行结果
             case AUDIOSTREAM_INTERRUPT_HINT_RESUME: {
-                if ( play_when_ready_change_reason == PlayWhenReadyChangeReason::AUDIO_INTERRUPT_PAUSE ) {
+                if ( _play_when_ready_change_reason == PlayWhenReadyChangeReason::AUDIO_INTERRUPT_PAUSE ) {
                     onPlay(PlayWhenReadyChangeReason::AUDIO_INTERRUPT_RESUME);
                 }
             }
@@ -317,34 +331,34 @@ void AudioPlayer::onRenderError(OH_AudioStream_Result error) {
 }
 
 void AudioPlayer::onError(std::shared_ptr<Error> error) {
-    if ( flags.has_error || flags.released ) {
+    if ( _flags.has_error || _flags.released ) {
         return;
     }
     
-    flags.has_error = true;
+    _flags.has_error = true;
     
-    if ( flags.is_renderer_running ) {
-        audio_renderer->stop();
-        flags.is_renderer_running = false;
+    if ( _flags.is_renderer_running ) {
+        _audio_renderer->stop();
+        _flags.is_renderer_running = false;
     }
     onEvent(std::make_shared<ErrorEventMessage>(error));
 }
 
 void AudioPlayer::onPlay(PlayWhenReadyChangeReason reason) {
-    if ( flags.has_error || flags.released ) {
+    if ( _flags.has_error || _flags.released ) {
         return;
     }
 
-    play_when_ready_change_reason = reason;
+    _play_when_ready_change_reason = reason;
     
-    if ( !flags.play_when_ready ) {
-        flags.play_when_ready = true;
+    if ( !_flags.play_when_ready ) {
+        _flags.play_when_ready = true;
         
-        if ( !flags.prepared ) {
+        if ( !_flags.prepared ) {
             onPrepare();
         }
         
-        if ( flags.prepared ) {
+        if ( _flags.prepared ) {
             startRenderer();
         }
     }
@@ -354,26 +368,26 @@ void AudioPlayer::onPlay(PlayWhenReadyChangeReason reason) {
 
 void AudioPlayer::onPause(PlayWhenReadyChangeReason reason, bool should_invoke_pause) {
     
-    if ( flags.has_error || flags.released ) {
+    if ( _flags.has_error || _flags.released ) {
         return;
     }
     
-    play_when_ready_change_reason = reason;
+    _play_when_ready_change_reason = reason;
     
-    if ( flags.play_when_ready ) {
-        flags.play_when_ready = false;
+    if ( _flags.play_when_ready ) {
+        _flags.play_when_ready = false;
         
-        if ( flags.is_renderer_running ) {
+        if ( _flags.is_renderer_running ) {
             // 当被系统强制中断时 render 没有必要执行 pause, 外部可以传递该参数决定是否需要调用render的暂停;
             if ( should_invoke_pause ) {
-              OH_AudioStream_Result render_ret = audio_renderer->pause();
+              OH_AudioStream_Result render_ret = _audio_renderer->pause();
                 if ( render_ret != AUDIOSTREAM_SUCCESS ) {
                     onRenderError(render_ret);
                     return;
                 }
             }
             
-            flags.is_renderer_running = false;
+            _flags.is_renderer_running = false;
         }
     }
     
@@ -381,16 +395,24 @@ void AudioPlayer::onPause(PlayWhenReadyChangeReason reason, bool should_invoke_p
 }
 
 void AudioPlayer::onEvent(std::shared_ptr<EventMessage> msg) {
-    event_msg_queue->push(msg);
+    _event_msg_queue->push(msg);
 }
 
 void AudioPlayer::startRenderer() {
-    OH_AudioStream_Result render_ret = audio_renderer->play();
+    OH_AudioStream_Result render_ret = _audio_renderer->play();
     if ( render_ret != AUDIOSTREAM_SUCCESS ) {
         onRenderError(render_ret);
         return;
     }
-    flags.is_renderer_running = true;
+    _flags.is_renderer_running = true;
+}
+
+AudioItem* AudioPlayer::onCreateAudioItem(const std::string& url, const AudioItem::Options& options) {
+    return new AudioItem(url, options);
+}
+
+AudioItem *AudioPlayer::getAudioItem() {
+    return _audio_item;
 }
 
 }

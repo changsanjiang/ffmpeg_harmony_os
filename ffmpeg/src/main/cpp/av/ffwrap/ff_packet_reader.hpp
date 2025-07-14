@@ -15,31 +15,32 @@
     along with @sj/ffmpeg. If not, see <http://www.gnu.org/licenses/>.
  * */
 //
-//  ff_audio_packet_reader.hpp
+//  ff_packet_reader.hpp
 //  LWZFFmpegLib
 //
 //  Created by sj on 2025/5/16.
 //
 
-#ifndef FFAV_AudioPacketReader_hpp
-#define FFAV_AudioPacketReader_hpp
+#ifndef FFAV_PacketReader_hpp
+#define FFAV_PacketReader_hpp
 
 #include <functional>
 #include <map>
 #include <thread>
 #include <mutex>
+#include "ff_stream_provider.hpp"
 #include "ff_types.hpp"
 
 namespace FFAV {
 
 class MediaReader;
 
-/** 用来读取音频流中未解码的数据包; */
-class AudioPacketReader {
+/** 用来读取未解码的数据包; */
+class PacketReader {
     
 public:
-    AudioPacketReader();
-    ~AudioPacketReader();
+    PacketReader();
+    ~PacketReader();
     
     // normal: prepare => start => stop
     // error: reset => prepare(reprepare) => start => stop
@@ -48,20 +49,27 @@ public:
     void start(); // 启动读取数据包;
     void seekTo(int64_t seek_position); // seek_position in base q;
     void stop(); // 停止读取数据包;
-    void reset(); // 重置所有状态, 重置后可以重新调用 prepare 初始化;
+    void reset(); // 重置所有状态, 重置后可以重新调用 prepare 初始化; 可能会阻塞调用线程(会等待内部的读取线程执行结束);
     
     void setPacketBufferFull(bool is_full);
     
-    using StreamReadyCallback = std::function<void(AudioPacketReader *_Nonnull reader, AVStream *_Nonnull stream)>;
-    void setAudioStreamReadyCallback(StreamReadyCallback callback); // 打开流的回调;
+    using StreamReadyCallback = std::function<void(PacketReader *_Nonnull reader)>;
+    void setStreamReadyCallback(StreamReadyCallback callback); // 打开流的回调;
     
-    using ReadPacketCallback = std::function<void(AudioPacketReader *_Nonnull reader, AVPacket *_Nullable packet, bool should_flush)>; // eof 时 packet 为 nullptr;
+    using ReadPacketCallback = std::function<void(PacketReader *_Nonnull reader, AVPacket *_Nullable packet, bool should_flush)>; // eof 时 packet 为 nullptr;
     void setReadPacketCallback(ReadPacketCallback callback); // 读取到数据包的回调;
     
-    using ErrorCallback = std::function<void(AudioPacketReader *_Nonnull reader, int ff_err)>;
+    using ErrorCallback = std::function<void(PacketReader *_Nonnull reader, int ff_err)>;
     void setErrorCallback(ErrorCallback callback); // 报错时的回调;
     
     int getError();
+    
+    // 请在 StreamReady 的时候调用
+    StreamProvider*_Nullable getStreamProvider();
+    int getStreamCount();
+    AVStream*_Nullable*_Nullable getStreams();
+    AVStream*_Nullable getBestStream(AVMediaType mediaType);
+    AVStream*_Nullable getFirstStream(AVMediaType mediaType);
     
 private:
     void ReadLoop();
@@ -88,7 +96,6 @@ private:
     
     std::atomic<int64_t> _req_seek_time { AV_NOPTS_VALUE }; // in base q;
     int64_t _seeking_time { AV_NOPTS_VALUE }; // in base q;
-    int _stream_index { AVERROR_STREAM_NOT_FOUND };
     
     std::atomic<State> _state { State::Pending };
     std::atomic<bool> _packet_buffer_full { false };
@@ -98,4 +105,4 @@ private:
 
 }
 
-#endif /* FFAV_AudioPacketReader_hpp */
+#endif /* FFAV_PacketReader_hpp */

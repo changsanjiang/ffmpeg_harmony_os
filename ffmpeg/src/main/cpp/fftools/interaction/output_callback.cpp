@@ -1,3 +1,4 @@
+#ifdef ENABLE_GPL
 /**
     This file is part of @sj/ffmpeg.
     
@@ -13,7 +14,25 @@
     
     You should have received a copy of the GNU General Public License
     along with @sj/ffmpeg. If not, see <http://www.gnu.org/licenses/>.
- * */
+ */
+#else
+/**
+    This file is part of @sj/ffmpeg-audio.
+    
+    @sj/ffmpeg-audio is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 2.1 of the License, or
+    (at your option) any later version.
+    
+    @sj/ffmpeg-audio is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+    GNU Lesser General Public License for more details.
+    
+    You should have received a copy of the GNU Lesser General Public License
+    along with @sj/ffmpeg-audio. If not, see <http://www.gnu.org/licenses/>.
+ */
+#endif
 //
 // Created on 2024/11/12.
 //
@@ -21,7 +40,7 @@
 // please include "napi/native_api.h".
 
 #include "output_callback.h"
-#include "ff_ctx.h"
+#include "ff_ctx.hpp"
 
 EXTERN_C_START
 void

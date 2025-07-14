@@ -1,27 +1,11 @@
-/**
-    This file is part of @sj/ffmpeg.
-    
-    @sj/ffmpeg is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-    
-    @sj/ffmpeg is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-    GNU General Public License for more details.
-    
-    You should have received a copy of the GNU General Public License
-    along with @sj/ffmpeg. If not, see <http://www.gnu.org/licenses/>.
- * */
 //
-//  AudioTranscoder.cpp
+//  SingleStreamAudioTranscoder.cpp
 //  LWZFFmpegLib
 //
 //  Created by sj on 2025/5/16.
 //
 
-#include "ff_audio_transcoder.hpp"
+#include "ff_single_stream_audio_transcoder.hpp"
 #include "ff_packet_queue.hpp"
 #include "ff_media_decoder.hpp"
 #include "ff_filter_graph.hpp"
@@ -30,19 +14,20 @@
 #include "ff_audio_utils.hpp"
 
 #include <sstream>
+#include <stdint.h>
 
 namespace FFAV {
 
 /// 数据包缓存阈值(字节)
-static int const kPacketSizeThreshold = 5 * 1024 * 1024;
+static int const kPacketSizeThreshold = 1 * 1024 * 1024;
 static const std::string FF_FILTER_BUFFER_SRC_NAME = "0:a";
 static const std::string FF_FILTER_BUFFER_SINK_NAME = "result";
 
-AudioTranscoder::AudioTranscoder() {
+SingleStreamAudioTranscoder::SingleStreamAudioTranscoder(): AudioTranscoder() {
     
 }
 
-AudioTranscoder::~AudioTranscoder() {
+SingleStreamAudioTranscoder::~SingleStreamAudioTranscoder() {
     if ( _decoder ) {
         delete _decoder;
         _decoder = nullptr;
@@ -81,13 +66,22 @@ AudioTranscoder::~AudioTranscoder() {
     }
 }
 
-int AudioTranscoder::init(AVStream * _Nonnull in_stream, int output_sample_rate, AVSampleFormat output_sample_format, int output_channels) {
+int SingleStreamAudioTranscoder::init(StreamProvider* stream_provider, int output_sample_rate, AVSampleFormat output_sample_format, int output_channels) {
+    auto stream = stream_provider->getBestStream(AVMEDIA_TYPE_AUDIO) ?: stream_provider->getFirstStream(AVMEDIA_TYPE_AUDIO);
+    return init(stream, output_sample_rate, output_sample_format, output_channels);    
+}
+
+int SingleStreamAudioTranscoder::init(AVStream* in_stream, int output_sample_rate, AVSampleFormat output_sample_format, int output_channels) {
+    if ( !in_stream ) {
+        return AVERROR_STREAM_NOT_FOUND;
+    }
+    
     int ret = 0;
     char ch_layout_desc[64];
 
     _in_stream_time_base = in_stream->time_base;
-    _in_stream_duration = in_stream->duration;
-    
+    _in_stream_index = in_stream->index;
+    _duration = av_rescale_q(in_stream->duration, in_stream->time_base, (AVRational){ 1, output_sample_rate });
     _output_sample_rate = output_sample_rate;
     _output_sample_format = output_sample_format;
     _output_channels = output_channels;
@@ -127,15 +121,31 @@ int AudioTranscoder::init(AVStream * _Nonnull in_stream, int output_sample_rate,
     _pkt = av_packet_alloc();
     _dec_frame = av_frame_alloc();
     _filt_frame = av_frame_alloc();
+    _initialized = true;
     
 on_exit:
     return ret;
 }
 
-int AudioTranscoder::enqueue(AVPacket * _Nullable packet, FlushMode mode) {
+int SingleStreamAudioTranscoder::enqueue(AVPacket * _Nullable packet) {
+    if ( packet ) {
+        if ( packet->stream_index == _in_stream_index ) {
+            _pkt_queue_end_pts = av_rescale_q(packet->pts + packet->duration, _in_stream_time_base, (AVRational){ 1, _output_sample_rate });
+            _packet_queue->push(packet);
+        }
+    }
+    else {
+        _packet_reached_eof = true;
+        
+        if ( _packet_queue->getCount() == 0 ) {
+            _transcoding_eof = true;
+        }
+    }
+    return 0;
+}
+
+int SingleStreamAudioTranscoder::flush(FlushMode mode) {
     switch ( mode ) {
-        case FlushMode::None:
-            break;
         case FlushMode::Full: {
             _packet_reached_eof = false;
             _transcoding_eof = false;
@@ -170,21 +180,32 @@ int AudioTranscoder::enqueue(AVPacket * _Nullable packet, FlushMode mode) {
         }
             break;
     }
-    
-    if ( packet ) {
-        _packet_queue->push(packet);
+    return 0;
+}
+
+int SingleStreamAudioTranscoder::tryTranscode(void * _Nonnull * _Nonnull out_data, int frame_capacity, int64_t * _Nullable out_pts, bool * _Nullable out_eof) {
+    if ( !_initialized ) {
+        return false;
     }
-    else {
-        _packet_reached_eof = true;
-        
-        if ( _packet_queue->getCount() == 0 ) {
-            _transcoding_eof = true;
-        }
+
+    int ret = process(frame_capacity);
+    // 只有数据量足够或者eof时才进行读取操作;
+    // 存在数据时: 判断是否 eof 或者数据量足够;
+    if ( ret > 0 && (ret >= frame_capacity || _transcoding_eof) ) {
+        return read(out_data, frame_capacity, out_pts, out_eof);
+    }
+
+    if ( out_eof ) {
+        *out_eof = isReadEof();
     }
     return 0;
 }
 
-int AudioTranscoder::tryTranscode(void * _Nonnull * _Nonnull out_data, int frame_capacity, int64_t * _Nullable out_pts, bool * _Nullable out_eof) {
+int SingleStreamAudioTranscoder::process(int frame_capacity) {
+    if ( !_initialized ) {
+        return false;
+    }
+
     // 控制缓冲， 确保可以流畅播放(队列中的pkts加起来的时长需要满足3s)
     if ( !_should_drain_packets ) {
         if ( _packet_reached_eof ) {
@@ -197,12 +218,13 @@ int AudioTranscoder::tryTranscode(void * _Nonnull * _Nonnull out_data, int frame
             }
         }
     }
-    
+
     if ( !_should_drain_packets ) {
-        return 0;
+        return _fifo->getNumberOfSamples();
     }
-    
+
     // transcoding
+    // return if err
     int ret = 0;
     do {
         // 如果转码后的数据足够(满足frame_capacity)或者已转码结束, 则退出循环
@@ -283,46 +305,72 @@ int AudioTranscoder::tryTranscode(void * _Nonnull * _Nonnull out_data, int frame
             return ret; // return error;
         }
     } while (true);
-    
+
+    if ( _packet_queue->getCount() == 0 ) {
+        // 已榨干pkts
+        _should_drain_packets = false;
+    }
+
+    // 返回已转码的数量
+    return _fifo->getNumberOfSamples();
+}
+
+int SingleStreamAudioTranscoder::read(void *_Nonnull*_Nonnull out_data, int frame_capacity, int64_t *_Nullable out_pts, bool *_Nullable out_eof) {
+    if ( !_initialized ) {
+        return false;
+    }
+
+    int ret = 0;
     // read fifo
     int nb_samples = _fifo->getNumberOfSamples();
-    if ( nb_samples > 0 && (nb_samples >= frame_capacity || _transcoding_eof) ) {
+    if ( nb_samples > 0 ) {
         ret = _fifo->read(out_data, frame_capacity, out_pts);
     }
     
-    // eof
+    // eof flag
     if ( out_eof ) {
-        *out_eof = _transcoding_eof && (_fifo->getNumberOfSamples() == 0); // 转码eof并且所有数据均被读取;
-    }
-    
-    // 已榨干pkts
-    if ( _packet_queue->getCount() == 0 ) {
-        _should_drain_packets = false;
+        *out_eof = isReadEof();
     }
     return ret;
 }
 
-bool AudioTranscoder::isPacketBufferFull() {
-    return _packet_queue->getSize() >= kPacketSizeThreshold;
+bool SingleStreamAudioTranscoder::isReadEof() {
+    return _initialized && _transcoding_eof && _fifo->getNumberOfSamples() == 0; // 转码eof并且所有数据均被读取;
 }
 
-int64_t AudioTranscoder::getLastPresentationPacketEndPts() {
-    int64_t pts = _packet_queue->getLastPresentationPacketEndPts();
-    if ( pts == AV_NOPTS_VALUE && _packet_reached_eof ) {
-        pts = _in_stream_duration;
-    }
-    return pts;
+bool SingleStreamAudioTranscoder::isTranscodingEof() {
+    return _transcoding_eof;
 }
 
-int64_t AudioTranscoder::getFifoEndPts() {
-    return _fifo->getEndPts();
+bool SingleStreamAudioTranscoder::isPacketBufferFull() {
+    return _initialized && _packet_queue->getSize() >= kPacketSizeThreshold;
 }
 
-AVRational AudioTranscoder::getStreamTimeBase() {
-    return _in_stream_time_base;
+int64_t SingleStreamAudioTranscoder::getPacketQueueEndPts() {
+    return _pkt_queue_end_pts;
 }
 
-int AudioTranscoder::recreateFilterGraph() {
+int64_t SingleStreamAudioTranscoder::getFifoEndPts() {
+    return _initialized ? _fifo->getEndPts() : 0;
+}
+
+int64_t SingleStreamAudioTranscoder::getDuration() {
+    return _duration;
+}
+
+int SingleStreamAudioTranscoder::getOutputSampleRate() {
+    return _output_sample_rate;
+}
+
+AVSampleFormat SingleStreamAudioTranscoder::getOutputSampleFormat() {
+    return _output_sample_format;
+}
+
+int SingleStreamAudioTranscoder::getOutputChannels() {
+    return _output_channels;
+}
+
+int SingleStreamAudioTranscoder::recreateFilterGraph() {
     if ( _filter_graph ) {
         delete _filter_graph;
         _filter_graph = nullptr;
@@ -330,7 +378,7 @@ int AudioTranscoder::recreateFilterGraph() {
     return createFilterGraph(_buf_src_params, _output_sample_rate, _output_sample_format, _output_channel_layout_desc, &_filter_graph);
 }
 
-int AudioTranscoder::createFilterGraph(AVBufferSrcParameters *_Nonnull buf_src_params, int output_sample_rate, AVSampleFormat output_sample_format, const std::string& output_channel_layout_desc, FFAV::FilterGraph *_Nullable*_Nonnull out_filter_graph) {
+int SingleStreamAudioTranscoder::createFilterGraph(AVBufferSrcParameters *_Nonnull buf_src_params, int output_sample_rate, AVSampleFormat output_sample_format, const std::string& output_channel_layout_desc, FFAV::FilterGraph *_Nullable*_Nonnull out_filter_graph) {
     FFAV::FilterGraph *filter_graph = new FFAV::FilterGraph();
     std::stringstream filter_desc;
     int ret = 0;

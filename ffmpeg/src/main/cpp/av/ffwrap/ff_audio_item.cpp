@@ -6,8 +6,9 @@
 
 #include "ff_audio_item.hpp"
 #include <stdint.h>
-#include "ff_audio_packet_reader.hpp"
-#include "ff_audio_transcoder.hpp"
+#include "av/utils/logger.h"
+#include "ff_single_stream_audio_transcoder.hpp"
+#include "ff_packet_reader.hpp"
 #include "../utils/network_reachability.hpp"
 #include "../utils/task_scheduler.hpp"
 
@@ -20,25 +21,35 @@ AudioItem::AudioItem(const std::string& url, const AudioItem::Options& options):
     _start_time_pos(options.start_time_pos > 0 ? options.start_time_pos : AV_NOPTS_VALUE),
     _output_sample_rate(options.output_sample_rate),
     _output_sample_format(options.output_sample_format),
-    _output_channels(options.output_channels)
+    _output_channels(options.output_channels),
+    _output_time_base({ 1, options.output_sample_rate })
 {
     
 }
 
 AudioItem::~AudioItem() {
+    std::shared_ptr<TaskScheduler> reset_reader_task = nullptr;
+    PacketReader *reader = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        reader = _reader;
+        reset_reader_task = std::move(_reset_reader_task);
+    }
+    if ( reset_reader_task ) {
+        reset_reader_task->tryCancel();
+    }
+    
+    if ( reader ) {
+        reader->reset(); // 等待内部的读取线程结束;
+    }
+    
     std::unique_lock<std::mutex> lock(mtx);
-
     if ( _network_status_change_callback_id != NetworkReachability::UnregisteredCallbackId ) {
         NetworkReachability::removeStatusChangeCallback(_network_status_change_callback_id);
     }
     
-    if ( _reset_reader_task ) {
-        _reset_reader_task->tryCancel();
-        _reset_reader_task.reset();
-    }
-    
     if ( _reader ) {
-        delete _reader;
+        delete _reader; // 前面reader已被重置(内部读取线程已结束), 可以放心的销毁了
         _reader = nullptr;
     }
     
@@ -54,8 +65,8 @@ void AudioItem::prepare() {
         return;
     }
     
-    _reader = new AudioPacketReader();
-    _reader->setAudioStreamReadyCallback(std::bind(&AudioItem::onStreamReady, this, std::placeholders::_1, std::placeholders::_2));
+    _reader = new PacketReader();
+    _reader->setStreamReadyCallback(std::bind(&AudioItem::onStreamReady, this, std::placeholders::_1));
     _reader->setReadPacketCallback(std::bind(&AudioItem::onReadPacket, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     _reader->setErrorCallback(std::bind(&AudioItem::onReadError, this, std::placeholders::_1, std::placeholders::_2));
     _reader->prepare(_url, _http_options);
@@ -121,25 +132,13 @@ void AudioItem::setErrorCallback(ErrorCallback callback) {
     _on_error_callback = callback;
 }
 
-int AudioItem::getOutputSampleRate() {
-    return _output_sample_rate;
-}
-
-AVSampleFormat AudioItem::getOutputSampleFormat() {
-    return _output_sample_format;
-}
-
-int AudioItem::getOutputChannels() {
-    return _output_channels;
-}
-
 int AudioItem::getError() {
     return _ff_err.load();
 }
 
-void AudioItem::onStreamReady(AudioPacketReader *reader, AVStream *stream) {
+void AudioItem::onStreamReady(PacketReader *reader) {
     std::unique_lock<std::mutex> lock(mtx);
-    if ( _transcoder ) { // reader reseted;
+    if ( _initialized ) { // reader reseted;
         int64_t seek_time;
         if ( _seeking ) { // 说明用户执行了 seek 操作, 是在 seek 中触发的 reset;
             seek_time = _start_time_pos;     // 需要从seek的位置开始读取数据包;
@@ -159,41 +158,49 @@ void AudioItem::onStreamReady(AudioPacketReader *reader, AVStream *stream) {
         return;
     }
     
-    int ret = 0;
-    auto transcoder = new AudioTranscoder();
-    ret = transcoder->init(stream, _output_sample_rate, _output_sample_format, _output_channels);
+    int ret = onCreateTranscoder(reader->getStreamProvider(), _output_sample_rate, _output_sample_format, _output_channels, &_transcoder);
     if ( ret < 0 ) {
         _ff_err.store(ret);
         lock.unlock();
-        delete transcoder;
         if ( _on_error_callback ) _on_error_callback(ret);
         return;
     }
-    _transcoder = transcoder;
-    _stream_time_base = stream->time_base;
-    _duration = stream->duration;
     
+    _duration = _transcoder->getDuration();
+    _initialized = true;
     lock.unlock();
     reader->start();
-    if ( _on_stream_ready_callback ) _on_stream_ready_callback(_duration, _stream_time_base);
+    if ( _on_stream_ready_callback ) _on_stream_ready_callback(_duration, _output_time_base);
 }
 
-void AudioItem::onReadPacket(AudioPacketReader *reader, AVPacket *pkt, bool should_flush) { // eof 时 packet 为 nullptr;
+void AudioItem::onReadPacket(PacketReader *reader, AVPacket *pkt, bool should_flush) { // eof 时 packet 为 nullptr;
     std::unique_lock<std::mutex> lock(mtx);
     if ( !should_flush && _seeking ) {
         return;
     }
     
-    auto flush_mode = AudioTranscoder::FlushMode::None;
+    int ret = 0;
     if ( should_flush ) {
-        flush_mode = _flush_packet_only ? AudioTranscoder::FlushMode::PacketOnly : AudioTranscoder::FlushMode::Full; // 确定是否需要仅清空 pkt 相关的缓存或全部缓存;
+        auto flush_mode = _flush_packet_only ? FlushMode::PacketOnly : FlushMode::Full; // 确定是否需要仅清空 pkt 相关的缓存或全部缓存;
         _flush_packet_only = false;
         _seeking = false;
         _reader->setPacketBufferFull(false);
+        
+        ret = _transcoder->flush(flush_mode);
+        if ( ret < 0 ) {
+            _ff_err.store(ret);
+            lock.unlock();
+            if ( _on_error_callback ) _on_error_callback(ret);
+            return;
+        }
     }
     
-    int ret = _transcoder->enqueue(pkt, flush_mode);
+    ret = _transcoder->enqueue(pkt);
     if ( ret < 0 ) {
+        if ( ret == AVERROR_STREAM_NOT_FOUND ) {
+            return;
+        }
+        
         _ff_err.store(ret);
         lock.unlock();
         if ( _on_error_callback ) _on_error_callback(ret);
@@ -204,18 +211,18 @@ void AudioItem::onReadPacket(AudioPacketReader *reader, AVPacket *pkt, bool shou
         _reader->setPacketBufferFull(true);
     }
     
-    auto buffered_time = pkt != nullptr ? _transcoder->getLastPresentationPacketEndPts() : _duration;
+    auto buffered_time = pkt != nullptr ? _transcoder->getPacketQueueEndPts() : _duration;
     auto changed_buffered_time = false;
-    if ( buffered_time != _buffered_time ) {
+    if ( buffered_time != AV_NOPTS_VALUE && buffered_time != _buffered_time ) {
         _buffered_time = buffered_time;
         changed_buffered_time = true;
     }
     
     lock.unlock();
-    if ( changed_buffered_time && _on_buffered_time_change_callback ) _on_buffered_time_change_callback(buffered_time, _stream_time_base);
+    if ( changed_buffered_time && _on_buffered_time_change_callback ) _on_buffered_time_change_callback(buffered_time, _output_time_base);
 }
 
-void AudioItem::onReadError(AudioPacketReader *reader, int ff_err) {
+void AudioItem::onReadError(PacketReader *reader, int ff_err) {
     std::unique_lock<std::mutex> lock(mtx);
     if ( ff_err == AVERROR_DECODER_NOT_FOUND ||
          ff_err == AVERROR_DEMUXER_NOT_FOUND ||
@@ -259,6 +266,21 @@ void AudioItem::prepareReaderAgainIfError() {
     // prepare again
     _reader->reset();
     _reader->prepare(_url, _http_options);
+}
+
+int AudioItem::onCreateTranscoder(StreamProvider* stream_provider, int output_sample_rate, AVSampleFormat output_sample_format, int output_channels, AudioTranscoder** out_transcoder) {
+    auto transcoder = new SingleStreamAudioTranscoder();
+    int ret = transcoder->init(stream_provider, output_sample_rate, output_sample_format, output_channels);
+    if ( ret < 0 ) {
+        delete transcoder;
+        return ret;
+    }
+    *out_transcoder = transcoder;
+    return 0;
+}
+
+AudioTranscoder* AudioItem::getTranscoder() {
+    return _transcoder;
 }
 
 }

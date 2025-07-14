@@ -4,8 +4,8 @@
 // Node APIs are not fully supported. To solve the compilation error of the interface cannot be found,
 // please include "napi/native_api.h".
 
-#ifndef FFMPEG_HARMONY_OS_AUDIOITEM_H
-#define FFMPEG_HARMONY_OS_AUDIOITEM_H
+#ifndef FFAV_AudioItem_hpp
+#define FFAV_AudioItem_hpp
 
 #include <stdint.h>
 #include <functional>
@@ -13,11 +13,11 @@
 #include <map>
 #include <mutex>
 #include "ff_types.hpp"
+#include "ff_audio_transcoder.hpp"
 
 namespace FFAV {
 
-class AudioPacketReader;
-class AudioTranscoder;
+class PacketReader;
 class TaskScheduler;
 
 class AudioItem {
@@ -38,7 +38,7 @@ public:
     using ErrorCallback = std::function<void(int ff_err)>;
     
     AudioItem(const std::string& url, const Options& options);
-    ~AudioItem();
+    virtual ~AudioItem();
     
     void prepare();
     void seekTo(int64_t time);  // in AV_TIME_BASE;
@@ -51,20 +51,20 @@ public:
      *  */
     int tryTranscode(void **out_data, int frame_capacity, int64_t *out_pts, bool *out_eof); // out_pts in output time base;
     
-    int getOutputSampleRate();
-    AVSampleFormat getOutputSampleFormat();
-    int getOutputChannels();
-    
     int getError();
     
     void setStreamReadyCallback(StreamReadyCallback callback);
     void setBufferedTimeChangeCallback(BufferedTimeChangeCallback callback);
     void setErrorCallback(ErrorCallback callback);
 
+protected:
+    virtual int onCreateTranscoder(StreamProvider* stream_provider, int output_sample_rate, AVSampleFormat output_sample_format, int output_channels, AudioTranscoder** out_transcoder);
+    AudioTranscoder* getTranscoder();
+    
 private:
-    void onStreamReady(AudioPacketReader* reader, AVStream* stream);
-    void onReadPacket(AudioPacketReader* reader, AVPacket* pkt, bool should_flush);
-    void onReadError(AudioPacketReader* reader, int ff_err);
+    void onStreamReady(PacketReader* reader);
+    void onReadPacket(PacketReader* reader, AVPacket* pkt, bool should_flush);
+    void onReadError(PacketReader* reader, int ff_err);
     
     void prepareReaderAgainIfError();
     
@@ -75,14 +75,13 @@ private:
     int _output_sample_rate;
     AVSampleFormat _output_sample_format;
     int _output_channels;
+    AVRational _output_time_base;
+    AudioTranscoder* _transcoder { nullptr };
     
-    AVRational _stream_time_base;
+    PacketReader *_reader { nullptr };
     
-    AudioPacketReader *_reader { nullptr };
-    AudioTranscoder *_transcoder { nullptr };
-    
-    int64_t _duration { 0 };
-    int64_t _buffered_time { 0 };
+    int64_t _duration { 0 }; // in output time base
+    int64_t _buffered_time { 0 };  // in output time base
     std::atomic<int> _ff_err { 0 };
     
     std::mutex mtx;
@@ -94,10 +93,11 @@ private:
     std::shared_ptr<TaskScheduler> _reset_reader_task { nullptr };
     
     int _network_status_change_callback_id;
+    bool _initialized { false };
     bool _flush_packet_only { false };
     bool _seeking { false };
 };
 
 }
 
-#endif //FFMPEG_HARMONY_OS_AUDIOITEM_H
+#endif //FFAV_AudioItem_hpp

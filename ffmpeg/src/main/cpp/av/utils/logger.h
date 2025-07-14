@@ -16,6 +16,12 @@ extern "C" {
 void ff_console_print(const char *fmt, ...);
 void ff_console_vprint(const char *fmt, va_list args);
 
+#ifdef FFAV_DEBUG
+#define FFAV_DEBUG_LOG(fmt, ...) ff_console_print(fmt, ##__VA_ARGS__)
+#else
+#define FFAV_DEBUG_LOG(fmt, ...) 
+#endif
+
 #ifdef __cplusplus
 }
 #endif

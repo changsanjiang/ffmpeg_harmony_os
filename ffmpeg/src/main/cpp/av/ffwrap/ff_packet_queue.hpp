@@ -40,6 +40,7 @@ public:
     void push(AVPacket* packet);               // 队尾插入
     bool pop(AVPacket* packet);                // 队首取出（拷贝数据，释放原始包）
     void clear();                              // 清空所有队列
+    AVPacket* peek();                          // 查看头部的pkt, 不可直接使用, 请使用pop取出后使用;
 
     int64_t getLastPresentationPacketEndPts(); // 最后呈现的数据包的endPts(PTS + duration)
     int64_t getDuration();                     // 当前所有 packet 的时长

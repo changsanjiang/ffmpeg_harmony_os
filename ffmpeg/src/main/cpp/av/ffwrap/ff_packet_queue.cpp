@@ -85,6 +85,13 @@ void PacketQueue::clear() {
     _total_size = 0;
 }
 
+AVPacket* PacketQueue::peek() {
+    if ( !_queue.empty() ) {
+        return _queue.front();
+    }
+    return nullptr;
+}
+
 int64_t PacketQueue::getLastPresentationPacketEndPts() {
     return _last_presentation_packet_end_pts;
 }

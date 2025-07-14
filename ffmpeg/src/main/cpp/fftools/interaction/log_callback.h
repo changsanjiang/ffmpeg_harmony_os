@@ -1,3 +1,4 @@
+#ifdef ENABLE_GPL
 /**
     This file is part of @sj/ffmpeg.
     
@@ -13,7 +14,25 @@
     
     You should have received a copy of the GNU General Public License
     along with @sj/ffmpeg. If not, see <http://www.gnu.org/licenses/>.
- * */
+ */
+#else
+/**
+    This file is part of @sj/ffmpeg-audio.
+    
+    @sj/ffmpeg-audio is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 2.1 of the License, or
+    (at your option) any later version.
+    
+    @sj/ffmpeg-audio is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+    GNU Lesser General Public License for more details.
+    
+    You should have received a copy of the GNU Lesser General Public License
+    along with @sj/ffmpeg-audio. If not, see <http://www.gnu.org/licenses/>.
+ */
+#endif
 //
 // Created on 2024/11/7.
 //
@@ -25,12 +44,10 @@
 #ifndef UTILITIES_LOG_CALLBACK_H
 #define UTILITIES_LOG_CALLBACK_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-    void native_log(int level, const char *msg);
-#ifdef __cplusplus
-}
-#endif
+#include "common.h"
 
+EXTERN_C_START
+void
+native_log(int level, const char *msg);
+EXTERN_C_END
 #endif //UTILITIES_LOG_CALLBACK_H

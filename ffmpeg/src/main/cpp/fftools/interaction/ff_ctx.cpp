@@ -20,7 +20,7 @@
 // Node APIs are not fully supported. To solve the compilation error of the interface cannot be found,
 // please include "napi/native_api.h".
 
-#include "ff_ctx.h"
+#include "ff_ctx.hpp"
 #include <unistd.h>  // for sleep (UNIX systems)
 
 EXTERN_C_START

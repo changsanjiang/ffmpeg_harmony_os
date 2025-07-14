@@ -14,9 +14,13 @@ elseif(OHOS_ARCH STREQUAL "x86_64")
     add_definitions(-DFFAV_ARCH_X86_64)
 endif()
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_definitions(-DFFAV_DEBUG)
+endif()
+
 add_definitions(-DFFAV_PLATFORM_OHOS)
 
-file(GLOB FF_SRC_FILES "napi_init.cpp" "fftools/*.c" "extension/*.c" "extension/*.cpp" "av/*.cpp" "av/**/*.cpp" "general/*.cpp")
+file(GLOB FF_SRC_FILES "napi_init.cpp" "fftools/*.c" "fftools/**/*.c" "fftools/**/*.cpp" "av/*.cpp" "av/**/*.cpp" "general/*.cpp")
 add_library(ffmpeg SHARED ${FF_SRC_FILES})
 target_include_directories(ffmpeg PRIVATE
     ${NATIVERENDER_ROOT_PATH}

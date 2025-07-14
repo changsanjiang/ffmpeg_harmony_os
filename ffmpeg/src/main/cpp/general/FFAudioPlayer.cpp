@@ -26,8 +26,6 @@
 
 //#define DEBUG
 
-#include "av/audio/PlayWhenReadyChangeReason.h"
-
 namespace FFAV {
 
 //struct FFAudioPlayer::FFAudioPlaybackOptions { 
@@ -57,6 +55,7 @@ napi_value FFAudioPlayer::Init(napi_env env, napi_value exports) {
         { "seek", nullptr, Seek, nullptr, nullptr, nullptr, napi_default, nullptr},
         { "on", nullptr, On, nullptr, nullptr, nullptr, napi_default, nullptr},
         { "off", nullptr, Off, nullptr, nullptr, nullptr, napi_default, nullptr},
+        { "durationPlayed", nullptr, nullptr, GetDurationPlayed, nullptr, nullptr, napi_default, nullptr},
     };
 
     size_t property_count = sizeof(properties) / sizeof(properties[0]);
@@ -161,13 +160,11 @@ napi_value FFAudioPlayer::SetUrl(napi_env env, napi_callback_info info) {
     FFAudioPlayer* obj;
     napi_unwrap(env, js_this, reinterpret_cast<void**>(&obj));
     
-    obj->url.clear();
-    obj->options.reset();
-    
     napi_valuetype urltype;
     napi_typeof(env, args[url_idx], &urltype);
 
-    if ( urltype == napi_null || urltype == napi_undefined ) {
+    if ( urltype != napi_string ) {
+        obj->stop();
         return nullptr;
     }
 
@@ -180,8 +177,6 @@ napi_value FFAudioPlayer::SetUrl(napi_env env, napi_callback_info info) {
 
     std::string new_url(url_size, '\0'); 
     napi_get_value_string_utf8(env, args[url_idx], &new_url[0], url_size + 1, &url_size);
-    obj->url = std::move(new_url);  
-    
     
     int64_t start_time_position_ms = 0;
     std::map<std::string, std::string> http_options;
@@ -225,9 +220,11 @@ napi_value FFAudioPlayer::SetUrl(napi_env env, napi_callback_info info) {
         }
     }
     
-    obj->options.start_time_position_ms = start_time_position_ms;
-    obj->options.http_options = std::move(http_options);
-    obj->options.stream_usage = stream_usage;
+    FFAV::AudioPlaybackOptions options;
+    options.start_time_position_ms = start_time_position_ms;
+    options.http_options = std::move(http_options);
+    options.stream_usage = stream_usage;
+    obj->setUrl(new_url, options);
     return nullptr;
 }
 
@@ -423,6 +420,18 @@ napi_value FFAudioPlayer::GetPlayableDuration(napi_env env, napi_callback_info i
     return time_ms;
 }
 
+napi_value FFAudioPlayer::GetDurationPlayed(napi_env env, napi_callback_info info) {
+    napi_value js_this;
+    napi_get_cb_info(env, info, nullptr, nullptr, &js_this, nullptr);
+
+    FFAudioPlayer* obj;
+    napi_unwrap(env, js_this, reinterpret_cast<void**>(&obj));
+    
+    napi_value time_ms;
+    napi_create_int64(env, obj->getDurationPlayed(), &time_ms);
+    return time_ms;
+}
+
 napi_value FFAudioPlayer::GetError(napi_env env, napi_callback_info info) {
     napi_value js_this;
     napi_get_cb_info(env, info, nullptr, nullptr, &js_this, nullptr);
@@ -598,9 +607,22 @@ FFAudioPlayer::~FFAudioPlayer() {
         napi_release_threadsafe_function(js_func_error_change_callback, napi_tsfn_release);
         js_func_error_change_callback = nullptr;
     }
+    releasePlayer();
+    
     FFAV::Error* error = cur_error.load();
     if ( error ) {
         delete error;
+    }
+}
+
+void FFAudioPlayer::setUrl(const std::string& url, const FFAV::AudioPlaybackOptions& options) {
+    releasePlayer();
+    
+    this->url = url;
+    this->options = options;
+    
+    if ( play_when_ready.load() ) {
+        prepare();
     }
 }
 
@@ -618,7 +640,7 @@ bool FFAudioPlayer::createPlayer() {
 void FFAudioPlayer::prepare() {
     if ( createPlayer() ) {
         player->prepare();
-        if ( this->play_when_ready.load() ) player->play();
+        if ( play_when_ready.load() ) player->play();
     }
 }
 
@@ -645,6 +667,12 @@ void FFAudioPlayer::pause() {
 }
 
 void FFAudioPlayer::stop() {
+    url.clear();
+    releasePlayer();
+    onPlayWhenReadyChange(false, FFAV::PlayWhenReadyChangeReason::USER_REQUEST);
+}
+
+void FFAudioPlayer::releasePlayer() {
     if ( player != nullptr ) {
         delete player;
         player = nullptr;
@@ -654,10 +682,6 @@ void FFAudioPlayer::stop() {
     onCurrentTimeChange(0);
     onPlayableDurationChange(0);
     onDurationChange(0);
-    onPlayWhenReadyChange(false, FFAV::PlayWhenReadyChangeReason::USER_REQUEST);
-    
-    url.clear();
-    options.reset();
 }
 
 void FFAudioPlayer::seek(int64_t time_ms) {
@@ -699,6 +723,10 @@ void FFAudioPlayer::setDeviceType(int32_t device_type) {
             player->setDefaultOutputDevice(this->device_type);
         }
     }
+}
+
+int64_t FFAudioPlayer::getDurationPlayed() {
+    return player ? player->getDurationPlayed() : 0;
 }
 
 void FFAudioPlayer::onPlayerEvent(std::shared_ptr<FFAV::EventMessage> msg_ptr) {

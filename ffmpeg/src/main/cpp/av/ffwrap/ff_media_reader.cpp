@@ -26,6 +26,59 @@
 
 namespace FFAV {
 
+class StreamProviderImpl: public StreamProvider {
+public:
+    StreamProviderImpl(AVFormatContext *fmt_ctx): StreamProvider(), _fmt_ctx(fmt_ctx) {
+        
+    }
+    
+    ~StreamProviderImpl() { }
+    
+    unsigned int getStreamCount() { 
+        return _fmt_ctx->nb_streams;
+    }
+    
+    unsigned int getStreamCount(AVMediaType type) {
+        unsigned int count = 0;
+        for ( int i = 0 ; i < _fmt_ctx->nb_streams ; ++ i ) {
+            auto stream = _fmt_ctx->streams[i];
+            if ( stream->codecpar->codec_type == type ) {
+                count += 1;
+            }
+        }
+        return count;
+    }
+
+    AVStream* getStream(int stream_index) {
+        return stream_index >= 0 && stream_index < _fmt_ctx->nb_streams ? _fmt_ctx->streams[stream_index] : nullptr;
+    }
+    
+    AVStream *getBestStream(AVMediaType type) { 
+        return getStream(av_find_best_stream(_fmt_ctx, type, -1, -1, nullptr, 0));
+    }
+    
+    AVStream* getFirstStream(AVMediaType type) {
+       for ( int i = 0 ; i < _fmt_ctx->nb_streams ; ++ i ) {
+            auto stream = _fmt_ctx->streams[i];
+            if ( stream->codecpar->codec_type == type ) {
+                return stream;
+            }
+        }
+        return nullptr;
+    }
+    
+    AVStream** getStreams() {
+        return _fmt_ctx->streams;
+    }
+    
+private:
+    AVFormatContext* _fmt_ctx;
+};
+
+} // namespace FFAV
+
+namespace FFAV {
+
 static int interrupt_cb(void* ctx) {
     std::atomic<bool>* interrupt_requested = static_cast<std::atomic<bool>*>(ctx);
     bool shouldInterrupt = interrupt_requested->load(); // 是否请求中断
@@ -107,12 +160,33 @@ AVStream** _Nullable MediaReader::getStreams() {
     return _fmt_ctx->streams;
 }
 
+AVStream* _Nullable MediaReader::getFirstStream(AVMediaType type) {
+    for ( int i = 0 ; i < _fmt_ctx->nb_streams ; ++ i ) {
+        auto stream = _fmt_ctx->streams[i];
+        if ( stream->codecpar->codec_type == type ) {
+            return stream;
+        }
+    }
+    return nullptr;
+}
+
 int MediaReader::findBestStream(AVMediaType type) {
     if ( _fmt_ctx == nullptr ) {
         throw_error("MediaReader::findBestStream - AVFormatContext is not initialized");
     }
 
     return av_find_best_stream(_fmt_ctx, type, -1, -1, nullptr, 0);
+}
+
+StreamProvider* MediaReader::getStreamProvider() {
+    if ( _fmt_ctx == nullptr ) {
+        throw_error("MediaReader::getStreamProvider - AVFormatContext is not initialized");
+    }
+    
+    if ( _stream_provider == nullptr ) {
+        _stream_provider = new StreamProviderImpl(_fmt_ctx);
+    }
+    return _stream_provider;
 }
 
 int MediaReader::readPacket(AVPacket* _Nonnull pkt) {
@@ -146,6 +220,10 @@ void MediaReader::setInterrupted() {
 
 void MediaReader::release() {
     setInterrupted();
+
+    if ( _stream_provider ) {
+        delete _stream_provider;
+    }
 
     if ( _fmt_ctx ) {
         avformat_close_input(&_fmt_ctx);

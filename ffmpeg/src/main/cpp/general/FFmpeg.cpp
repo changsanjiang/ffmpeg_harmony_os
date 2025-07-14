@@ -24,7 +24,7 @@
 #include <cstdint>
 #include <cstdio>
 #include "FFAbortController.h"
-#include "extension/ff_ctx.h"
+#include "fftools/interaction/ff_ctx.hpp"
 
 EXTERN_C_START
 #include "libavutil/error.h"
