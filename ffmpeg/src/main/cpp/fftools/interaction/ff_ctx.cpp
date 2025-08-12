@@ -45,20 +45,26 @@ ff_set_callback_refs(
 
 void 
 ff_invoke_log_callback(int level, const char *message) {
-    atomic_fetch_add(&ff_ctx.pendingCallbacks, 1);
-    napi_call_threadsafe_function(ff_ctx.log_callback_ref, new FFCallbackData { &ff_ctx.pendingCallbacks, message, level }, napi_tsfn_blocking);
+    if ( ff_ctx.log_callback_ref ) {
+        atomic_fetch_add(&ff_ctx.pendingCallbacks, 1);
+        napi_call_threadsafe_function(ff_ctx.log_callback_ref, new FFCallbackData { &ff_ctx.pendingCallbacks, message, level }, napi_tsfn_blocking);
+    }
 }
 
 void 
 ff_invoke_progress_callback(const char *message) {
-    atomic_fetch_add(&ff_ctx.pendingCallbacks, 1);
-    napi_call_threadsafe_function(ff_ctx.progress_callback_ref, new FFCallbackData { &ff_ctx.pendingCallbacks, message, 0 }, napi_tsfn_blocking);
+    if ( ff_ctx.progress_callback_ref ) {
+        atomic_fetch_add(&ff_ctx.pendingCallbacks, 1);
+        napi_call_threadsafe_function(ff_ctx.progress_callback_ref, new FFCallbackData { &ff_ctx.pendingCallbacks, message, 0 }, napi_tsfn_blocking);
+    }
 }
 
 void 
 ff_invoke_output_callback(const char *message) {
-    atomic_fetch_add(&ff_ctx.pendingCallbacks, 1);
-    napi_call_threadsafe_function(ff_ctx.output_callback_ref, new FFCallbackData { &ff_ctx.pendingCallbacks, message, 0 }, napi_tsfn_blocking);
+    if ( ff_ctx.output_callback_ref ) {
+        atomic_fetch_add(&ff_ctx.pendingCallbacks, 1);
+        napi_call_threadsafe_function(ff_ctx.output_callback_ref, new FFCallbackData { &ff_ctx.pendingCallbacks, message, 0 }, napi_tsfn_blocking);
+    }
 }
 
 void 

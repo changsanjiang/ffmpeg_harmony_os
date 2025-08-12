@@ -36,7 +36,7 @@ EXTERN_C_START
 #include <string>
 
 int ffmpeg_main(_Atomic bool *is_running, int argc, char **argv);
-int ffporbe_main(_Atomic bool *is_running, int argc, char **argv);
+int ffprobe_main(_Atomic bool *is_running, int argc, char **argv);
 EXTERN_C_END
 
 namespace FFAV { 
@@ -238,7 +238,7 @@ void FFmpeg::AsyncExecuteCallback(napi_env env, void *data) {
         
         // execute cmds
         d->ff_ret = d->is_ffmpeg ? ffmpeg_main(&d->is_running, d->cmds_count, d->cmds) : 
-                                   ffporbe_main(&d->is_running, d->cmds_count, d->cmds);
+                                   ffprobe_main(&d->is_running, d->cmds_count, d->cmds);
         
         ff_wait_callbacks();
         ff_set_callback_refs(nullptr, nullptr, nullptr);

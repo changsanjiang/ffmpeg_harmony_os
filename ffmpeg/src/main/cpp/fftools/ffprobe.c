@@ -4173,7 +4173,7 @@ ffprobe_reset_thread_variables(void) {
             do_show_##varname = 1;                                      \
     } while (0)
 
-int ffporbe_main(_Atomic bool *is_running, int argc, char **argv)
+int ffprobe_main(_Atomic bool *is_running, int argc, char **argv)
 {
    if ( !atomic_load(is_running) ) {
         return 255;

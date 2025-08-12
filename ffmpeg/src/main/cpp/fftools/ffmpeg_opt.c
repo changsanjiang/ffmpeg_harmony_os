@@ -590,6 +590,7 @@ static int opt_init_hw_device(void *optctx, const char *opt, const char *arg)
             av_log(NULL, AV_LOG_ERROR, "%s\n", av_hwdevice_get_type_name(type));
         av_log(NULL, AV_LOG_ERROR, "\n");
         exit_program(0);
+        return 0;
     } else {
         return hw_device_init_from_string(arg, NULL);
     }
