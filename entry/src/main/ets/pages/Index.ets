@@ -72,7 +72,7 @@ struct Index {
 
   async aboutToAppear(): Promise<void> {
 
-    await MCMediaCache.prepare();
+    await MCMediaCache.prepare(getContext());
     MCMediaCache.setLogEnabled(true);
     MCMediaCache.setLogWhiteModules([MCLogModule.MCHttpConnectionHandler, MCLogModule.MCHttpResponse])
 

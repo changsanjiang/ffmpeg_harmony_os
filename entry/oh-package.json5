@@ -7,7 +7,7 @@
   "license": "",
   "dependencies": {
     "@sj/ffmpeg": "file:../ffmpeg",
-    "@sj/mediacache": "^1.0.2",
+    "@sj/mediacache": "^1.0.6",
     "@sj/filemgr": "file:../filemgr"
   }
 }
